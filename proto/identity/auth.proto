@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package auth;
+
+option go_package = "graphophone.identity/internal/services/common/auth";
+
+service AuthService {
+    rpc SignUp(SignUpRequest) returns (Tokens) {}
+    rpc Login(LoginRequest) returns (Tokens) {}
+    rpc RefreshTokens(Tokens) returns (Tokens) {}
+    rpc ExtractClaims(Tokens) returns (Claims) {}
+    rpc Logout(Tokens) returns (Empty) {}
+}
+
+message Empty {}
+
+message Tokens {
+    string access_token = 1;
+    string refresh_token = 2;
+}
+
+message LoginRequest {
+    string username = 1;
+    string password = 2;
+}
+
+message SignUpRequest {
+    string username = 1;
+    string email = 2;
+    string password = 3;
+    optional string first_name = 4;
+    optional string last_name = 5;
+}
+
+message Claims {
+    uint32 user_id = 1;
+}

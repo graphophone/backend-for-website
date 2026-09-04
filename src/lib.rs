@@ -3,6 +3,7 @@ use axum::{Router};
 use tokio::net::TcpListener;
 
 pub mod config;
+mod clients;
 mod handlers;
 
 pub async fn run(conf: &config::Config) -> Result<()> {

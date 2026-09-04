@@ -9,3 +9,9 @@ axum = "0.8.9"
 serde = { version = "1.0.229", features = ["derive"] }
 tokio = { version = "1.53.1", features = ["full"] }
 toml = "1.1.5"
+tonic = "0.14"
+prost = "0.14"
+tonic-prost = "0.14"
+
+[build-dependencies]
+tonic-prost-build = "0.14"
