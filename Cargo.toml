@@ -5,3 +5,6 @@ edition = "2024"
 
 [dependencies]
 actix-web = "4"
+anyhow = "1.0.104"
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.1.5"

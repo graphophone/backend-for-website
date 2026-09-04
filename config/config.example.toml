@@ -1,0 +1,5 @@
+[services]
+identity = "http://host.docker.internal:9543"
+music_catalog = "http://host.docker.internal:7878"
+music_storage = "http://host.docker.internal:9832"
+social = "http://host.docker.internal:7987"
