@@ -18,8 +18,8 @@ struct SignUpRequest {
     pub last_name: Option<String>,
 }
 
-#[derive(Serialize)]
-struct TokensResponse {
+#[derive(Deserialize, Serialize)]
+struct Tokens {
     pub access_token: String,
     pub refresh_token: String,
 }
@@ -36,7 +36,7 @@ async fn login_handler(
     match client.login(login_request).await {
         Ok(res) => {
             let tokens = res.into_inner();
-            let response = TokensResponse {
+            let response = Tokens {
                 access_token: tokens.access_token,
                 refresh_token: tokens.refresh_token,
             };
@@ -61,7 +61,7 @@ async fn sign_up_handler(
     match client.sign_up(sign_up_request).await {
         Ok(res) => {
             let tokens = res.into_inner();
-            let response = TokensResponse {
+            let response = Tokens {
                 access_token: tokens.access_token,
                 refresh_token: tokens.refresh_token,
             };
@@ -74,10 +74,14 @@ async fn sign_up_handler(
 async fn logout_handler() {
 }
 
+async fn refresh_handler() {
+}
+
 pub fn create_auth_router(auth_client: AuthClient) -> Router {
     Router::new()
         .route("/login", post(login_handler))
         .route("/sign-up", post(sign_up_handler))
         .route("/logout", post(logout_handler))
+        .route("/refresh", post(refresh_handler))
         .with_state(auth_client)
 }
