@@ -9,6 +9,15 @@ struct LoginRequest {
     pub password: String,
 }
 
+#[derive(Deserialize)]
+struct SignUpRequest {
+    pub username: String,
+    pub email: String,
+    pub password: String,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+}
+
 #[derive(Serialize)]
 struct TokensResponse {
     pub access_token: String,
@@ -38,8 +47,28 @@ async fn login_handler(
 }
 
 async fn sign_up_handler(
+    State(mut client): State<AuthClient>,
+    Json(req): Json<SignUpRequest>,
+) -> Result<Response, HandlerError> {
+    let sign_up_request = auth::auth::SignUpRequest {
+        username: req.username,
+        email: req.email,
+        password: req.password,
+        first_name: req.first_name,
+        last_name: req.last_name,
+    };
 
-) {
+    match client.sign_up(sign_up_request).await {
+        Ok(res) => {
+            let tokens = res.into_inner();
+            let response = TokensResponse {
+                access_token: tokens.access_token,
+                refresh_token: tokens.refresh_token,
+            };
+            Ok(Json(response).into_response())
+        },
+        Err(_) => Err(HandlerError::InternalError),
+    }
 }
 
 async fn logout_handler() {
