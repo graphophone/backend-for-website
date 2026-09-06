@@ -10,7 +10,7 @@ pub struct LoginRequest {
 
 #[derive(Deserialize, Validate)]
 pub struct SignUpRequest {
-    #[validate(length(min = 4, max = 16))]
+    #[validate(length(min = 1, max = 16))]
     pub username: String,
     #[validate(email)]
     pub email: String,
@@ -27,7 +27,6 @@ pub struct Tokens {
 }
 
 fn validate_password(password: &str) -> Result<(), ValidationError> {
-    println!("hello from validation");
     if !password.is_ascii() {
         return Err(ValidationError::new("Password must only have ascii characters"));
     }
@@ -46,10 +45,7 @@ fn validate_password(password: &str) -> Result<(), ValidationError> {
     if !regex!(".*[0-9].*").is_match(password) {
         return Err(ValidationError::new("Password must have at least one digit"));
     }
-    if !regex!(".*[0-9].*").is_match(password) {
-        return Err(ValidationError::new("Password must have at least one digit"));
-    }
-    if !regex!(".*[!\"#$%&'()*+,./:;<=>?@[\\]^_`{|}~-].*").is_match(password) {
+    if !regex!(".*[$&+,:;=?@#|'<>.^*()%!-].*").is_match(password) {
         return Err(ValidationError::new("Password must have at least one special character"));
     }
     Ok(())

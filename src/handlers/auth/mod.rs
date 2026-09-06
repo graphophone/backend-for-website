@@ -31,8 +31,16 @@ async fn sign_up_handler(
     State(mut client): State<AuthClient>,
     Json(req): Json<dto::SignUpRequest>,
 ) -> Result<Response, HandlerError> {
-    if let Err(_) = req.validate() {
-        return Err(HandlerError::BadRequest)
+    if let Err(e) = req.validate() {
+        let desc = e.field_errors()
+            .into_iter()
+            .next()
+            .unwrap().1
+            .into_iter()
+            .next()
+            .unwrap()
+            .to_string();
+        return Err(HandlerError::BadRequest(desc));
     }
 
     let sign_up_request = auth::auth::SignUpRequest {
