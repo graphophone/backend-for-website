@@ -12,6 +12,8 @@ toml = "1.1.5"
 tonic = "0.14"
 prost = "0.14"
 tonic-prost = "0.14"
+validator = { version = "0.21", features = ["derive"] }
+regex = "1.13.1"
 
 [build-dependencies]
 tonic-prost-build = "0.14"

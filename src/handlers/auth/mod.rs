@@ -1,32 +1,12 @@
-use axum::{extract::Json, Router, extract::State, response::{IntoResponse, Response}, routing::post};
-use serde::{Deserialize, Serialize};
-
+use axum::{Json, Router, extract::State, response::{IntoResponse, Response}, routing::post};
+use validator::Validate;
 use crate::{clients::auth::{self, AuthClient}, handlers::error::HandlerError};
 
-#[derive(Deserialize)]
-struct LoginRequest {
-    pub username: String,
-    pub password: String,
-}
-
-#[derive(Deserialize)]
-struct SignUpRequest {
-    pub username: String,
-    pub email: String,
-    pub password: String,
-    pub first_name: Option<String>,
-    pub last_name: Option<String>,
-}
-
-#[derive(Deserialize, Serialize)]
-struct Tokens {
-    pub access_token: String,
-    pub refresh_token: String,
-}
+mod dto;
 
 async fn login_handler(
     State(mut client): State<AuthClient>,
-    Json(req): Json<LoginRequest>,
+    Json(req): Json<dto::LoginRequest>,
 ) -> Result<Response, HandlerError> {
     let login_request = auth::auth::LoginRequest {
         username: req.username,
@@ -36,7 +16,7 @@ async fn login_handler(
     match client.login(login_request).await {
         Ok(res) => {
             let tokens = res.into_inner();
-            let response = Tokens {
+            let response = dto::Tokens {
                 access_token: tokens.access_token,
                 refresh_token: tokens.refresh_token,
             };
@@ -46,10 +26,15 @@ async fn login_handler(
     }
 }
 
+#[axum::debug_handler]
 async fn sign_up_handler(
     State(mut client): State<AuthClient>,
-    Json(req): Json<SignUpRequest>,
+    Json(req): Json<dto::SignUpRequest>,
 ) -> Result<Response, HandlerError> {
+    if let Err(_) = req.validate() {
+        return Err(HandlerError::BadRequest)
+    }
+
     let sign_up_request = auth::auth::SignUpRequest {
         username: req.username,
         email: req.email,
@@ -61,7 +46,7 @@ async fn sign_up_handler(
     match client.sign_up(sign_up_request).await {
         Ok(res) => {
             let tokens = res.into_inner();
-            let response = Tokens {
+            let response = dto::Tokens {
                 access_token: tokens.access_token,
                 refresh_token: tokens.refresh_token,
             };
