@@ -1,11 +1,15 @@
-use axum::{Json, Router, extract::State, response::{IntoResponse, Response}, routing::post};
+use std::sync::Arc;
+use axum::{Json, Router, extract::State, http::StatusCode, response::{IntoResponse, Response}, routing::{delete, post}};
+use axum_cookie::CookieManager;
+use tokio::sync::Mutex;
 use validator::Validate;
-use crate::{clients::auth::{self, AuthClient}, handlers::error::HandlerError};
+use crate::{clients::auth::{self, AuthClient, auth::Tokens}, handlers::error::HandlerError, util};
 
 mod dto;
 
+#[axum::debug_handler]
 async fn login_handler(
-    State(mut client): State<AuthClient>,
+    State(client): State<Arc<Mutex<AuthClient>>>,
     Json(req): Json<dto::LoginRequest>,
 ) -> Result<Response, HandlerError> {
     let login_request = auth::auth::LoginRequest {
@@ -13,7 +17,8 @@ async fn login_handler(
         password: req.password,
     };
 
-    match client.login(login_request).await {
+    let mut c = client.lock().await;
+    match c.login(login_request).await {
         Ok(res) => {
             let tokens = res.into_inner();
             let response = dto::Tokens {
@@ -28,7 +33,7 @@ async fn login_handler(
 
 #[axum::debug_handler]
 async fn sign_up_handler(
-    State(mut client): State<AuthClient>,
+    State(client): State<Arc<Mutex<AuthClient>>>,
     Json(req): Json<dto::SignUpRequest>,
 ) -> Result<Response, HandlerError> {
     if let Err(e) = req.validate() {
@@ -51,7 +56,8 @@ async fn sign_up_handler(
         last_name: req.last_name,
     };
 
-    match client.sign_up(sign_up_request).await {
+    let mut c = client.lock().await;
+    match c.sign_up(sign_up_request).await {
         Ok(res) => {
             let tokens = res.into_inner();
             let response = dto::Tokens {
@@ -64,17 +70,51 @@ async fn sign_up_handler(
     }
 }
 
-async fn logout_handler() {
+async fn logout_handler(
+    State(client): State<Arc<Mutex<AuthClient>>>,
+    cookies: CookieManager,
+) -> Result<Response, HandlerError> {
+    let (access_token, refresh_token) = match util::cookie::extract_tokens(cookies) {
+        Ok(v) => v,
+        Err(_) => return Err(HandlerError::Unauthorized),
+    };
+
+    let tokens = Tokens {
+        access_token,
+        refresh_token,
+    };
+    let mut c = client.lock().await;
+    match c.logout(tokens).await {
+        Ok(_) => Ok(StatusCode::OK.into_response()),
+        Err(_) => Err(HandlerError::InternalError),
+    }
 }
 
-async fn refresh_handler() {
+async fn refresh_handler(
+    State(client): State<Arc<Mutex<AuthClient>>>,
+    cookies: CookieManager,
+) -> Result<Response, HandlerError> {
+    let (access_token, refresh_token) = match util::cookie::extract_tokens(cookies) {
+        Ok(v) => v,
+        Err(_) => return Err(HandlerError::Unauthorized),
+    };
+
+    let tokens = Tokens {
+        access_token,
+        refresh_token,
+    };
+    let mut c = client.lock().await;
+    match c.refresh_tokens(tokens).await {
+        Ok(_) => Ok(StatusCode::OK.into_response()),
+        Err(_) => Err(HandlerError::InternalError),
+    }
 }
 
-pub fn create_auth_router(auth_client: AuthClient) -> Router {
+pub fn create_auth_router(auth_client: Arc<Mutex<AuthClient>>) -> Router {
     Router::new()
         .route("/login", post(login_handler))
         .route("/sign-up", post(sign_up_handler))
-        .route("/logout", post(logout_handler))
+        .route("/logout", delete(logout_handler))
         .route("/refresh", post(refresh_handler))
         .with_state(auth_client)
 }
