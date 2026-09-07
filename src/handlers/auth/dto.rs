@@ -1,5 +1,5 @@
 use regex::regex;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 use validator::{Validate, ValidationError};
 
 #[derive(Deserialize)]
@@ -18,12 +18,6 @@ pub struct SignUpRequest {
     pub password: String,
     pub first_name: Option<String>,
     pub last_name: Option<String>,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct Tokens {
-    pub access_token: String,
-    pub refresh_token: String,
 }
 
 fn validate_password(password: &str) -> Result<(), ValidationError> {
