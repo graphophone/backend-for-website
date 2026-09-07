@@ -6,5 +6,5 @@ async fn main() -> Result<()> {
     let conf = Config::new("config/config.local.toml")
         .expect("failed to parse config");
 
-    run(&conf).await
+    run(conf).await
 }

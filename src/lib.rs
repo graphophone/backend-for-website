@@ -12,13 +12,17 @@ mod clients;
 mod handlers;
 mod util;
 
-pub async fn run(conf: &config::Config) -> Result<()> {
+pub async fn run(conf: config::Config) -> Result<()> {
     let auth_client = AuthClient::build(conf.services.identity.clone()).await?;
     let auth_client = Mutex::new(auth_client);
     let auth_client = Arc::new(auth_client);
+    let auth_conf = Arc::new(conf.auth);
 
     let router = Router::new()
-        .nest("/auth", create_auth_router(Arc::clone(&auth_client)));
+        .nest("/auth", create_auth_router(
+            Arc::clone(&auth_client),
+            Arc::clone(&auth_conf),
+        ));
     
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
 

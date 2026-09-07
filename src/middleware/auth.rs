@@ -4,7 +4,7 @@ use axum::{extract::{Request, State}, middleware::Next, response::Response};
 use axum_cookie::CookieManager;
 use tokio::sync::Mutex;
 
-use crate::{clients::auth::{self, AuthClient}, handlers::error::HandlerError, util};
+use crate::{clients::auth::{self, AuthClient}, handlers::error::HandlerError, util::cookie::extract_tokens};
 
 pub async fn auth_middleware(
     State(client): State<Arc<Mutex<AuthClient>>>,
@@ -12,7 +12,7 @@ pub async fn auth_middleware(
     mut req: Request,
     next: Next,
 ) -> Result<Response, HandlerError> {
-    let (access_token, refresh_token) = match util::cookie::extract_tokens(cookies) {
+    let (access_token, refresh_token) = match extract_tokens(&cookies) {
         Ok(v) => v,
         Err(_) => return Err(HandlerError::Unauthorized),
     };
