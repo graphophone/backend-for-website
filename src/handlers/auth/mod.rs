@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use axum::{Json, Router, extract::State, http::StatusCode, response::{IntoResponse, Response}, routing::{delete, post}};
+use axum::{Json, Router, extract::State, http::StatusCode, response::{IntoResponse, Response}, routing::{delete, patch, post}};
 use axum_cookie::{CookieLayer, CookieManager};
 use tokio::sync::Mutex;
 use validator::Validate;
@@ -126,8 +126,8 @@ async fn logout_handler(
 }
 
 async fn refresh_handler(
-    State(state): State<AuthState>,
     cookies: CookieManager,
+    State(state): State<AuthState>,
 ) -> Result<Response, HandlerError> {
     let (_, refresh_token) = match extract_tokens(&cookies) {
         Ok(v) => v,
@@ -137,10 +137,18 @@ async fn refresh_handler(
     let refresh_req = auth_grpc::RefreshToken {
         refresh_token,
     };
-    let mut auth: tokio::sync::MutexGuard<'_, auth_grpc::auth_client::AuthClient<tonic::transport::Channel>> = state.auth_client.lock().await;
+    let mut auth = state.auth_client.lock().await;
     match auth.refresh_tokens(refresh_req).await {
-        Ok(_) => Ok(StatusCode::OK.into_response()),
-        Err(_) => Err(HandlerError::InternalError),
+        Ok(res) => {
+            let tokens = res.into_inner();
+            add_token_cookies(
+                &cookies,
+                (tokens.access_token, tokens.refresh_token),
+                &state.auth_conf,
+            );
+            Ok(StatusCode::OK.into_response())
+        },
+        Err(_) => Err(HandlerError::Unauthorized),
     }
 }
 
@@ -153,7 +161,7 @@ pub fn create_auth_router(
         .route("/login", post(login_handler))
         .route("/sign-up", post(sign_up_handler))
         .route("/logout", delete(logout_handler))
-        .route("/refresh", post(refresh_handler))
+        .route("/refresh", patch(refresh_handler))
         .with_state(AuthState { identity_client, auth_client, auth_conf })
         .layer(CookieLayer::strict())
 }

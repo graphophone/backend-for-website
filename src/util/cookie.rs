@@ -8,11 +8,11 @@ const REFRESH_TOKEN_KEY: &str = "refresh_token";
 
 pub fn extract_tokens(cookies: &CookieManager) -> Result<(String, String)> {
     let access_token = match cookies.get(ACCESS_TOKEN_KEY) {
-        Some(v) => v.to_string(),
+        Some(v) => v.value().to_string(),
         None => return Err(anyhow::Error::msg("access token not found")),
     };
     let refresh_token = match cookies.get(REFRESH_TOKEN_KEY) {
-        Some(v) => v.to_string(),
+        Some(v) => v.value().to_string(),
         None => return Err(anyhow::Error::msg("refresh token not found")),
     };
 
