@@ -1,14 +1,15 @@
 use std::sync::Arc;
 use axum::{Json, Router, extract::State, http::StatusCode, response::{IntoResponse, Response}, routing::{delete, post}};
-use axum_cookie::{CookieManager};
+use axum_cookie::{CookieLayer, CookieManager};
 use tokio::sync::Mutex;
 use validator::Validate;
-use crate::{clients::auth::{self, AuthClient, auth::Tokens}, config::AuthConfig, handlers::error::HandlerError, util::{cookie::{add_token_cookies, extract_tokens, remove_token_cookies}}};
+use crate::{clients::{auth::{AuthClient, auth_grpc}, identity::{IdentityClient, identity_grpc}}, config::AuthConfig, handlers::error::HandlerError, util::cookie::{add_token_cookies, extract_tokens, remove_token_cookies}};
 
 mod dto;
 
 #[derive(Clone)]
 struct AuthState {
+    pub identity_client: Arc<Mutex<IdentityClient>>,
     pub auth_client: Arc<Mutex<AuthClient>>,
     pub auth_conf: Arc<AuthConfig>,
 }
@@ -19,13 +20,24 @@ async fn login_handler(
     State(state): State<AuthState>,
     Json(req): Json<dto::LoginRequest>,
 ) -> Result<Response, HandlerError> {
-    let login_request = auth::auth::LoginRequest {
+    let verify_req = identity_grpc::VerifyPasswordReq {
         username: req.username,
         password: req.password,
     };
 
-    let mut c = state.auth_client.lock().await;
-    match c.login(login_request).await {
+    let mut identity = state.identity_client.lock().await;
+    let res = identity.verify_password(verify_req).await;
+    drop(identity);
+    let user_id = match res {
+        Ok(user_id) => user_id.into_inner().user_id,
+        Err(_) => return Err(HandlerError::Unauthorized),
+    };
+
+    let login_req = auth_grpc::UserId { user_id };
+    let mut auth = state.auth_client.lock().await;
+    let res = auth.login(login_req).await;
+    drop(auth);
+    match res {
         Ok(res) => {
             let tokens = res.into_inner();
             add_token_cookies(
@@ -57,7 +69,7 @@ async fn sign_up_handler(
         return Err(HandlerError::BadRequest(desc));
     }
 
-    let sign_up_request = auth::auth::SignUpRequest {
+    let create_req = identity_grpc::CreateUserReq {
         username: req.username,
         email: req.email,
         password: req.password,
@@ -65,8 +77,19 @@ async fn sign_up_handler(
         last_name: req.last_name,
     };
 
-    let mut c = state.auth_client.lock().await;
-    match c.sign_up(sign_up_request).await {
+    let mut identity = state.identity_client.lock().await;
+    let res = identity.create_user(create_req).await;
+    drop(identity);
+    let user_id = match res {
+        Ok(v) => v.into_inner().user_id,
+        Err(_) => return Err(HandlerError::Conflict),
+    };
+
+    let login_req = auth_grpc::UserId { user_id };
+    let mut auth = state.auth_client.lock().await;
+    let res = auth.login(login_req).await;
+    drop(auth);
+    match res {
         Ok(res) => {
             let tokens = res.into_inner();
             add_token_cookies(
@@ -84,17 +107,16 @@ async fn logout_handler(
     cookies: CookieManager,
     State(state): State<AuthState>,
 ) -> Result<Response, HandlerError> {
-    let (access_token, refresh_token) = match extract_tokens(&cookies) {
+    let (_, refresh_token) = match extract_tokens(&cookies) {
         Ok(v) => v,
         Err(_) => return Err(HandlerError::Unauthorized),
     };
 
-    let tokens = Tokens {
-        access_token,
+    let logout_req = auth_grpc::RefreshToken {
         refresh_token,
     };
-    let mut c = state.auth_client.lock().await;
-    match c.logout(tokens).await {
+    let mut auth = state.auth_client.lock().await;
+    match auth.logout(logout_req).await {
         Ok(_) => {
             remove_token_cookies(&cookies);
             Ok(StatusCode::OK.into_response())
@@ -107,27 +129,31 @@ async fn refresh_handler(
     State(state): State<AuthState>,
     cookies: CookieManager,
 ) -> Result<Response, HandlerError> {
-    let (access_token, refresh_token) = match extract_tokens(&cookies) {
+    let (_, refresh_token) = match extract_tokens(&cookies) {
         Ok(v) => v,
         Err(_) => return Err(HandlerError::Unauthorized),
     };
 
-    let tokens = Tokens {
-        access_token,
+    let refresh_req = auth_grpc::RefreshToken {
         refresh_token,
     };
-    let mut c = state.auth_client.lock().await;
-    match c.refresh_tokens(tokens).await {
+    let mut auth: tokio::sync::MutexGuard<'_, auth_grpc::auth_client::AuthClient<tonic::transport::Channel>> = state.auth_client.lock().await;
+    match auth.refresh_tokens(refresh_req).await {
         Ok(_) => Ok(StatusCode::OK.into_response()),
         Err(_) => Err(HandlerError::InternalError),
     }
 }
 
-pub fn create_auth_router(auth_client: Arc<Mutex<AuthClient>>, auth_conf: Arc<AuthConfig>) -> Router {
+pub fn create_auth_router(
+    identity_client: Arc<Mutex<IdentityClient>>,
+    auth_client: Arc<Mutex<AuthClient>>,
+    auth_conf: Arc<AuthConfig>,
+) -> Router {
     Router::new()
         .route("/login", post(login_handler))
         .route("/sign-up", post(sign_up_handler))
         .route("/logout", delete(logout_handler))
         .route("/refresh", post(refresh_handler))
-        .with_state(AuthState { auth_client, auth_conf })
+        .with_state(AuthState { identity_client, auth_client, auth_conf })
+        .layer(CookieLayer::strict())
 }

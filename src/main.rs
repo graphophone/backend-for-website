@@ -3,7 +3,7 @@ use backend_for_website::{config::Config, run};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let conf = Config::new("config/config.local.toml")
+    let conf = Config::new("config/config.local.yaml")
         .expect("failed to parse config");
 
     run(conf).await

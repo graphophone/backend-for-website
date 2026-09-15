@@ -7,19 +7,21 @@ use tokio::sync::Mutex;
 use crate::{clients::auth::{self, AuthClient}, handlers::error::HandlerError, util::cookie::extract_tokens};
 
 pub async fn auth_middleware(
-    State(client): State<Arc<Mutex<AuthClient>>>,
+    State(state): State<Arc<Mutex<AuthClient>>>,
     cookies: CookieManager,
     mut req: Request,
     next: Next,
 ) -> Result<Response, HandlerError> {
-    let (access_token, refresh_token) = match extract_tokens(&cookies) {
+    let (access_token, _) = match extract_tokens(&cookies) {
         Ok(v) => v,
         Err(_) => return Err(HandlerError::Unauthorized),
     };
 
-    let mut c = client.lock().await;
-    let claims = c.extract_claims(auth::auth::Tokens { access_token, refresh_token }).await;
-    let claims = match claims {
+    let extract_req = auth::auth_grpc::AccessToken {
+        access_token,
+    };
+    let mut auth = state.lock().await;
+    let claims = match auth.extract_user_id(extract_req).await {
         Ok(v) => v.into_inner(),
         Err(_) => return Err(HandlerError::Unauthorized),
     };

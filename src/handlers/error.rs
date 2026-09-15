@@ -3,6 +3,7 @@ use axum::{http::StatusCode, response::{IntoResponse, Response}};
 pub enum HandlerError {
     NotFound,
     InternalError,
+    Conflict,
     BadRequest(String),
     Unauthorized,
 }
@@ -14,6 +15,7 @@ impl IntoResponse for HandlerError {
             Self::InternalError => (StatusCode::INTERNAL_SERVER_ERROR, String::from("Internal server error")),
             Self::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
             Self::Unauthorized => (StatusCode::UNAUTHORIZED, String::from("Unauthorized")),
+            Self::Conflict => (StatusCode::CONFLICT, String::from("Conflict")),
         };
         (status, body).into_response()
     }
