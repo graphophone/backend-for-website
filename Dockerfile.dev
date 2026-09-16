@@ -1,0 +1,13 @@
+FROM rust:1.97-alpine3.23 AS builder
+WORKDIR /app
+
+RUN apk add protoc
+
+COPY . .
+RUN cargo build
+
+FROM alpine:3.23
+
+COPY --from=builder /app/target/debug/backend-for-website .
+COPY config config
+CMD ["./backend-for-website"]

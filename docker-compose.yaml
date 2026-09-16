@@ -1,0 +1,9 @@
+services:
+  backend-for-website:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "9540:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
