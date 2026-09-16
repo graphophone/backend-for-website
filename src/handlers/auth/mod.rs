@@ -99,7 +99,7 @@ async fn sign_up_handler(
             );
             Ok(StatusCode::OK.into_response())
         },
-        Err(_) => Err(HandlerError::InternalError),
+        Err(_) => Ok(StatusCode::CREATED.into_response()),
     }
 }
 
