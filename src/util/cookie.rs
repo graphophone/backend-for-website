@@ -28,7 +28,7 @@ pub fn add_token_cookies(
         .path("/")
         .max_age(auth_conf.access_token_expiration_time)
         .http_only(true)
-        .secure(true)
+        .secure(false)
         .same_site(SameSite::Strict)
         .build();
     cookies.add(cookie);
@@ -37,7 +37,7 @@ pub fn add_token_cookies(
         .path("/")
         .max_age(auth_conf.refresh_token_expiration_time)
         .http_only(true)
-        .secure(true)
+        .secure(false)
         .same_site(SameSite::Strict)
         .build();
     cookies.add(cookie);
