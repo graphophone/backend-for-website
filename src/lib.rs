@@ -34,6 +34,7 @@ pub async fn run(conf: config::Config) -> Result<()> {
             Arc::clone(&auth_conf),
         ))
         .nest("/user", create_user_router(
+            auth_client.clone(),
             identity_client.clone(),
         ))
         .layer(CorsLayer::very_permissive())

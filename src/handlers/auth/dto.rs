@@ -16,7 +16,9 @@ pub struct SignUpRequest {
     pub email: String,
     #[validate(custom(function = "validate_password"))]
     pub password: String,
+    #[serde(rename(deserialize = "firstName"))]
     pub first_name: Option<String>,
+    #[serde(rename(deserialize = "lastName"))]
     pub last_name: Option<String>,
 }
 
