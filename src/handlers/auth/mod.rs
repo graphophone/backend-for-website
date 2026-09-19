@@ -3,7 +3,7 @@ use axum::{Json, Router, extract::State, http::StatusCode, response::{IntoRespon
 use axum_cookie::{CookieLayer, CookieManager};
 use tokio::sync::Mutex;
 use validator::Validate;
-use crate::{clients::{auth::{AuthClient, auth_grpc}, identity::{IdentityClient, identity_grpc}}, config::AuthConfig, handlers::error::HandlerError, util::cookie::{add_token_cookies, extract_tokens, remove_token_cookies}};
+use crate::{clients::{auth::{AuthClient, auth_grpc}, identity::{IdentityClient, identity_grpc}}, config::AuthConfig, handlers::error::HandlerError, util::cookie::{add_token_cookies, extract_refresh_token, remove_token_cookies}};
 
 mod dto;
 
@@ -107,7 +107,7 @@ async fn logout_handler(
     cookies: CookieManager,
     State(state): State<AuthState>,
 ) -> Result<Response, HandlerError> {
-    let (_, refresh_token) = match extract_tokens(&cookies) {
+    let refresh_token = match extract_refresh_token(&cookies) {
         Ok(v) => v,
         Err(_) => return Err(HandlerError::Unauthorized),
     };
@@ -129,7 +129,7 @@ async fn refresh_handler(
     cookies: CookieManager,
     State(state): State<AuthState>,
 ) -> Result<Response, HandlerError> {
-    let (_, refresh_token) = match extract_tokens(&cookies) {
+    let refresh_token = match extract_refresh_token(&cookies) {
         Ok(v) => v,
         Err(_) => return Err(HandlerError::Unauthorized),
     };
