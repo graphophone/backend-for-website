@@ -7,6 +7,8 @@ pub struct UserProfileResponse {
     pub username: String,
     #[serde(rename(serialize = "avatarUrl"))]
     pub avatar_url: Option<String>,
+    #[serde(rename(serialize = "bannerUrl"))]
+    pub banner_url: Option<String>,
     #[serde(rename(serialize = "firstName"))]
     pub first_name: Option<String>,
     #[serde(rename(serialize = "lastName"))]
