@@ -16,6 +16,7 @@ pub struct UserProfileResponse {
     pub bio: Option<String>,
     pub country: Option<String>,
     pub city: Option<String>,
+    pub email: Option<String>,
 }
 
 #[derive(Serialize)]

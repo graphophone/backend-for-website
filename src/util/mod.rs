@@ -1,2 +1,2 @@
 pub mod cookie;
-pub mod resources;
+pub mod assets;
