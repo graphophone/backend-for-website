@@ -1,6 +1,7 @@
-use axum::{Extension, Json, Router, extract::{Path, State}, middleware::from_fn_with_state, response::{IntoResponse, Response}, routing::get};
+use axum::{Extension, Json, Router, extract::{Path, State}, http::StatusCode, middleware::from_fn_with_state, response::{IntoResponse, Response}, routing::{get, put}};
 use axum_cookie::CookieLayer;
-use crate::{clients::{auth::AuthClient, identity::{IdentityClient, identity_grpc}}, handlers::{error::HandlerError, user::dto::{BasicProfileResponse, ProfileResponse}}, middleware::auth::auth_middleware, util::assets::asset_key_to_url};
+use tonic::Code;
+use crate::{clients::{auth::AuthClient, identity::{IdentityClient, identity_grpc}}, handlers::{error::HandlerError, user::dto::{BasicProfileRes, EditProfileReq, ProfileRes}}, middleware::auth::auth_middleware, util::assets::asset_key_to_url};
 
 mod dto;
 
@@ -24,7 +25,7 @@ async fn get_user_profile(
             let avatar_url = asset_key_to_url("avatar", profile.avatar_key);
             let banner_url = asset_key_to_url("banner", profile.banner_key);
 
-            let res = ProfileResponse {
+            let res = ProfileRes {
                 user_id: profile.user_id,
                 username: profile.username,
                 email: None,
@@ -55,7 +56,7 @@ async fn get_my_basic_profile(
             let res = res.into_inner();
 
             let avatar_url = asset_key_to_url("avatar", res.avatar_key);
-            Ok(Json(BasicProfileResponse {
+            Ok(Json(BasicProfileRes {
                 user_id: res.user_id,
                 username: res.username,
                 avatar_url,
@@ -80,7 +81,7 @@ async fn get_my_full_profile(
             let avatar_url = asset_key_to_url("avatar", res.avatar_key);
             let banner_url = asset_key_to_url("banner", res.banner_key);
 
-            Ok(Json(ProfileResponse {
+            Ok(Json(ProfileRes {
                 user_id: res.user_id,
                 username: res.username,
                 email: res.email,
@@ -97,6 +98,36 @@ async fn get_my_full_profile(
     }
 }
 
+#[axum::debug_handler]
+async fn edit_my_profile(
+    State(state): State<UserState>,
+    Extension(user_id): Extension<i64>,
+    Json(req): Json<EditProfileReq>,
+) -> Result<Response, HandlerError> {
+    let mut identity_client = state.identity_client;
+
+    let req = identity_grpc::UpdateProfileReq {
+        user_id,
+        username: req.username,
+        email: req.email,
+        first_name: req.first_name,
+        last_name: req.last_name,
+        bio: req.bio,
+        country: req.country,
+        city: req.city,
+    };
+    match identity_client.update_profile(req).await {
+        Ok(_) => Ok(StatusCode::OK.into_response()),
+        Err(e) => {
+            if e.code().eq(&Code::AlreadyExists) {
+                Err(HandlerError::Conflict)
+            } else {
+                Err(HandlerError::InternalError)
+            }
+        },
+    }
+}
+
 pub fn create_user_router(
     auth_client: AuthClient,
     identity_client: IdentityClient,
@@ -106,6 +137,7 @@ pub fn create_user_router(
         .merge(Router::new()
             .route("/me", get(get_my_basic_profile))
             .route("/full-profile", get(get_my_full_profile))
+            .route("/edit-profile", put(edit_my_profile))
             .layer(from_fn_with_state(auth_client, auth_middleware))
             .layer(CookieLayer::strict())
         )

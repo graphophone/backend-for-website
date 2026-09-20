@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use axum::{Json, Router, extract::State, http::StatusCode, response::{IntoResponse, Response}, routing::{delete, patch, post}};
 use axum_cookie::{CookieLayer, CookieManager};
+use tonic::Code;
 use validator::Validate;
 use crate::{clients::{auth::{AuthClient, auth_grpc}, identity::{IdentityClient, identity_grpc}}, config::AuthConfig, handlers::error::HandlerError, util::cookie::{add_token_cookies, extract_refresh_token, remove_token_cookies}};
 
@@ -17,7 +18,7 @@ struct AuthState {
 async fn login_handler(
     cookies: CookieManager,
     State(state): State<AuthState>,
-    Json(req): Json<dto::LoginRequest>,
+    Json(req): Json<dto::LoginReq>,
 ) -> Result<Response, HandlerError> {
     let mut identity_client = state.identity_client;
     let mut auth_client = state.auth_client;
@@ -53,7 +54,7 @@ async fn login_handler(
 async fn sign_up_handler(
     cookies: CookieManager,
     State(state): State<AuthState>,
-    Json(req): Json<dto::SignUpRequest>,
+    Json(req): Json<dto::SignUpReq>,
 ) -> Result<Response, HandlerError> {
     let mut identity_client = state.identity_client;
     let mut auth_client = state.auth_client;
@@ -78,15 +79,18 @@ async fn sign_up_handler(
         last_name: req.last_name,
     };
 
-    let res = identity_client.create_user(create_req).await;
-    let user_id = match res {
+    let user_id = match identity_client.create_user(create_req).await {
         Ok(v) => v.into_inner().user_id,
-        Err(_) => return Err(HandlerError::Conflict),
+        Err(e) => {
+            if e.code().eq(&Code::AlreadyExists) {
+                return Err(HandlerError::Conflict);
+            }
+            return Err(HandlerError::InternalError);
+        },
     };
 
     let login_req = auth_grpc::UserId { user_id };
-    let res = auth_client.login(login_req).await;
-    match res {
+    match auth_client.login(login_req).await {
         Ok(res) => {
             let tokens = res.into_inner();
             add_token_cookies(

@@ -3,13 +3,13 @@ use serde::{Deserialize};
 use validator::{Validate, ValidationError};
 
 #[derive(Deserialize)]
-pub struct LoginRequest {
+pub struct LoginReq {
     pub username: String,
     pub password: String,
 }
 
 #[derive(Deserialize, Validate)]
-pub struct SignUpRequest {
+pub struct SignUpReq {
     #[validate(length(min = 1, max = 16))]
     pub username: String,
     #[validate(email)]
