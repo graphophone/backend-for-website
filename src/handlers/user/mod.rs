@@ -1,6 +1,6 @@
 use axum::{Extension, Json, Router, extract::{Path, State}, middleware::from_fn_with_state, response::{IntoResponse, Response}, routing::get};
 use axum_cookie::CookieLayer;
-use crate::{clients::{auth::AuthClient, identity::{IdentityClient, identity_grpc}}, handlers::{error::HandlerError, user::dto::{UserBasicProfileResponse, UserProfileResponse}}, middleware::auth::auth_middleware, util::assets::asset_key_to_url};
+use crate::{clients::{auth::AuthClient, identity::{IdentityClient, identity_grpc}}, handlers::{error::HandlerError, user::dto::{BasicProfileResponse, ProfileResponse}}, middleware::auth::auth_middleware, util::assets::asset_key_to_url};
 
 mod dto;
 
@@ -24,7 +24,7 @@ async fn get_user_profile(
             let avatar_url = asset_key_to_url("avatar", profile.avatar_key);
             let banner_url = asset_key_to_url("banner", profile.banner_key);
 
-            let res = UserProfileResponse {
+            let res = ProfileResponse {
                 user_id: profile.user_id,
                 username: profile.username,
                 email: None,
@@ -55,7 +55,7 @@ async fn get_my_basic_profile(
             let res = res.into_inner();
 
             let avatar_url = asset_key_to_url("avatar", res.avatar_key);
-            Ok(Json(UserBasicProfileResponse {
+            Ok(Json(BasicProfileResponse {
                 user_id: res.user_id,
                 username: res.username,
                 avatar_url,
@@ -80,7 +80,7 @@ async fn get_my_full_profile(
             let avatar_url = asset_key_to_url("avatar", res.avatar_key);
             let banner_url = asset_key_to_url("banner", res.banner_key);
 
-            Ok(Json(UserProfileResponse {
+            Ok(Json(ProfileResponse {
                 user_id: res.user_id,
                 username: res.username,
                 email: res.email,

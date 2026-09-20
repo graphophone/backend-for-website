@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 #[derive(Serialize)]
-pub struct UserProfileResponse {
+pub struct ProfileResponse {
     #[serde(rename(serialize = "userId"))]
     pub user_id: i64,
     pub username: String,
@@ -20,7 +20,7 @@ pub struct UserProfileResponse {
 }
 
 #[derive(Serialize)]
-pub struct UserBasicProfileResponse {
+pub struct BasicProfileResponse {
     #[serde(rename(serialize = "userId"))]
     pub user_id: i64,
     pub username: String,
