@@ -1,7 +1,7 @@
 use axum::{Extension, Json, Router, extract::{Multipart, Path, State}, http::StatusCode, middleware::from_fn_with_state, response::{IntoResponse, Response}, routing::{get, put}};
 use axum_cookie::CookieLayer;
 use tonic::Code;
-use crate::{clients::{auth::AuthClient, identity::{IdentityClient, identity_grpc}}, handlers::{error::HandlerError, user::dto::{BasicProfileRes, EditProfileReq, ProfileRes}}, middleware::auth::auth_middleware, util::assets::asset_key_to_url};
+use crate::{clients::{auth::AuthClient, identity::{IdentityClient, identity_grpc}}, handlers::{error::HandlerError, user::dto::{BasicProfileRes, EditProfileReq, ProfileRes}}, middleware::auth::auth_middleware, util::assets::{asset_key_to_url, extract_image_data_from_multipart}};
 
 mod dto;
 
@@ -136,46 +136,14 @@ async fn edit_my_avatar(
 ) -> Result<Response, HandlerError> {
     let mut identity_client = state.identity_client;
 
-    let image_data = match image_multipart {
-        Some(mut image_multipart) => {
-            let field = image_multipart.next_field()
-                .await
-                .map_err(|_| HandlerError::BadRequest("Image has to be sent".to_string()))?;            
-            let bytes = match field {
-                Some(field) => {
-                    let mime_type = match field.content_type() {
-                        Some(v) => {
-                            let split = v.split("/");
-                            let mime_type = split.skip(1).next();
-                            match mime_type {
-                                Some(v) => v.to_string(),
-                                None => return Err(HandlerError::BadRequest("Couldn't get mime type".to_string())),
-                            }
-                        },
-                        None => return Err(HandlerError::BadRequest("Couldn't get mime type".to_string())),
-                    };
-
-                    let bytes = field.bytes()
-                        .await
-                        .map_err(|_| {
-                            HandlerError::BadRequest("Image has to be sent".to_string())
-                        })?
-                        .to_vec();
-                    
-                    (bytes, mime_type)
-                },
-                None => return Err(HandlerError::BadRequest("Image has to be sent".to_string())),
-            };
-            Some(bytes)
-        },
-        None => None,
-    };
+    let image_data = extract_image_data_from_multipart(image_multipart)
+        .await?;
 
     let image_payload = match image_data {
-        Some((image_bytes, mime_type)) => {
+        Some(data) => {
             let image = identity_grpc::Image {
-                image: image_bytes,
-                mime_type,
+                image: data.image_bytes,
+                mime_type: data.mime_type,
             };
             Some(image)
         },
