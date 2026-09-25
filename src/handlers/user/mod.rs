@@ -166,6 +166,44 @@ async fn edit_my_avatar(
     }
 }
 
+#[axum::debug_handler]
+async fn edit_my_banner(
+    State(state): State<UserState>,
+    Extension(user_id): Extension<i64>,
+    image_multipart: Option<Multipart>,
+) -> Result<Response, HandlerError> {
+    let mut identity_client = state.identity_client;
+
+    let image_data = extract_image_data_from_multipart(image_multipart)
+        .await?;
+
+    let image_payload = match image_data {
+        Some(data) => {
+            let image = identity_grpc::Image {
+                image: data.image_bytes,
+                mime_type: data.mime_type,
+            };
+            Some(image)
+        },
+        None => None,
+    };
+
+    let req = identity_grpc::UpdateBannerReq {
+        user_id,
+        banner: image_payload,
+    };
+    match identity_client.update_banner(req).await {
+        Ok(_) => Ok(StatusCode::OK.into_response()),
+        Err(e) => {
+            if e.code().eq(&Code::AlreadyExists) {
+                Err(HandlerError::Conflict)
+            } else {
+                Err(HandlerError::InternalError)
+            }
+        },
+    }
+}
+
 pub fn create_user_router(
     auth_client: AuthClient,
     identity_client: IdentityClient,
@@ -177,6 +215,7 @@ pub fn create_user_router(
             .route("/full-profile", get(get_my_full_profile))
             .route("/edit-profile", put(edit_my_profile))
             .route("/edit-avatar", put(edit_my_avatar))
+            .route("/edit-banner", put(edit_my_banner))
             .layer(from_fn_with_state(auth_client, auth_middleware))
             .layer(CookieLayer::strict())
         )
