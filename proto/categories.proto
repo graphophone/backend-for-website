@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package categories;
+
+service Categories {
+    rpc CreateCategory(CreateCategoryRequest) returns (CategoryData);
+    rpc GetCategories(GetCategoriesRequest) returns (CategoriesPage);
+}
+
+message CreateCategoryRequest {
+    string name = 1;
+}
+
+message CategoryData {
+    int64 id = 1;
+    string name = 2;
+}
+
+message GetCategoriesRequest {
+    int32 page_number = 1;
+    int32 page_size = 2;
+    string search_token = 3;
+}
+
+message CategoriesPage {
+    repeated CategoryData categories = 1;
+    int64 total_count = 2;
+}

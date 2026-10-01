@@ -4,7 +4,7 @@ use anyhow::Result;
 use axum::Router;
 use tokio::net::TcpListener;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
-use crate::{clients::{auth::AuthClient, identity::identity_grpc::identity_client::IdentityClient}, handlers::{auth::create_auth_router, user::create_user_router}};
+use crate::{clients::{auth::AuthClient, categories::CategoriesClient, identity::identity_grpc::identity_client::IdentityClient}, handlers::{auth::create_auth_router, categories::create_categories_router, user::create_user_router}};
 
 pub mod config;
 mod middleware;
@@ -24,7 +24,11 @@ pub async fn run(conf: config::Config) -> Result<()> {
     let identity_client = IdentityClient::build(
         conf.services.identity.clone(),
     ).await?;
-    
+
+    let categories_client = CategoriesClient::build(
+        conf.services.music_catalog.clone(),
+    ).await?;
+
     let auth_conf = Arc::new(conf.auth);
 
     let router = Router::new()
@@ -37,6 +41,7 @@ pub async fn run(conf: config::Config) -> Result<()> {
             auth_client.clone(),
             identity_client.clone(),
         ))
+        .nest("/categories", create_categories_router(categories_client))
         .layer(CorsLayer::very_permissive())
         .layer(TraceLayer::new_for_http());
     
