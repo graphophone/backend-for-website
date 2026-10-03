@@ -1,4 +1,5 @@
 pub mod auth;
-pub mod user;
 pub mod categories;
 pub mod error;
+pub mod tracks;
+pub mod user;

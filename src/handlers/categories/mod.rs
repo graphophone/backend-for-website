@@ -1,6 +1,17 @@
-use axum::{Json, Router, extract::{Query, State}, response::{IntoResponse, Response}, routing::get};
+use axum::{
+    Json, Router,
+    extract::{Query, State},
+    response::{IntoResponse, Response},
+    routing::get,
+};
 
-use crate::{clients::categories::{CategoriesClient, categories_grpc}, handlers::{categories::dto::{CategoryData, SearchQuery}, error::HandlerError}};
+use crate::{
+    clients::categories::{CategoriesClient, categories_grpc},
+    handlers::{
+        categories::dto::{CategoryData, SearchQuery},
+        error::HandlerError,
+    },
+};
 
 mod dto;
 
@@ -10,7 +21,7 @@ async fn search_categories(
 ) -> Result<Response, HandlerError> {
     let search_token = query.0.search_token;
 
-    let req = categories_grpc::GetCategoriesRequest {
+    let req = categories_grpc::GetCategoriesReq {
         search_token,
         page_number: 1,
         page_size: 5,
@@ -21,16 +32,17 @@ async fn search_categories(
         Err(_) => return Err(HandlerError::NotFound),
     };
 
-    let categories = res.into_iter().map(|c| CategoryData {
-        id: c.id,
-        name: c.name,
-    }).collect::<Vec<CategoryData>>();
+    let categories = res
+        .into_iter()
+        .map(|c| CategoryData {
+            id: c.id,
+            name: c.name,
+        })
+        .collect::<Vec<CategoryData>>();
     Ok(Json(categories).into_response())
 }
 
-pub fn create_categories_router(
-    categories_client: CategoriesClient,
-) -> Router {
+pub fn create_categories_router(categories_client: CategoriesClient) -> Router {
     Router::new()
         .route("/", get(search_categories))
         .with_state(categories_client)
