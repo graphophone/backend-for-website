@@ -24,7 +24,7 @@ async fn upload_track(
     Json(req): Json<UploadTrackReq>,
 ) -> Result<Response, HandlerError> {
     let req = tracks_grpc::UploadTrackReq {
-        name: req.name,
+        title: req.title,
         description: req.description,
         uploader_id: user_id,
         categories_ids: req.categories_ids,
