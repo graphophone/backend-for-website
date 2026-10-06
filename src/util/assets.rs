@@ -2,8 +2,20 @@ use axum::extract::Multipart;
 
 use crate::handlers::error::HandlerError;
 
-pub fn asset_key_to_url(key: Option<String>) -> Option<String> {
-    key.map(|v| format!("/assets/{v}"))
+pub enum AssetPrefix {
+    Identity,
+}
+
+impl std::string::ToString for AssetPrefix {
+    fn to_string(&self) -> String {
+        match self {
+            AssetPrefix::Identity => "identity",
+        }.to_string()
+    }
+}
+
+pub fn asset_key_to_url(prefix: AssetPrefix, key: Option<String>) -> Option<String> {
+    key.map(|v| format!("/{}/assets/{v}", prefix.to_string()))
 }
 
 pub struct ImageData {
