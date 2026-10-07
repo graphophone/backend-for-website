@@ -99,7 +99,7 @@ async fn get_my_full_profile(
 }
 
 #[axum::debug_handler]
-async fn edit_my_profile(
+async fn update_my_profile(
     State(state): State<UserState>,
     Extension(user_id): Extension<i64>,
     Json(req): Json<EditProfileReq>,
@@ -129,7 +129,7 @@ async fn edit_my_profile(
 }
 
 #[axum::debug_handler]
-async fn edit_my_avatar(
+async fn update_my_avatar(
     State(state): State<UserState>,
     Extension(user_id): Extension<i64>,
     image_multipart: Option<Multipart>,
@@ -167,7 +167,7 @@ async fn edit_my_avatar(
 }
 
 #[axum::debug_handler]
-async fn edit_my_banner(
+async fn update_my_banner(
     State(state): State<UserState>,
     Extension(user_id): Extension<i64>,
     image_multipart: Option<Multipart>,
@@ -213,9 +213,9 @@ pub fn create_user_router(
         .merge(Router::new()
             .route("/me", get(get_my_basic_profile))
             .route("/full-profile", get(get_my_full_profile))
-            .route("/edit-profile", put(edit_my_profile))
-            .route("/edit-avatar", put(edit_my_avatar))
-            .route("/edit-banner", put(edit_my_banner))
+            .route("/update-profile", put(update_my_profile))
+            .route("/update-avatar", put(update_my_avatar))
+            .route("/update-banner", put(update_my_banner))
             .layer(from_fn_with_state(auth_client, auth_middleware))
             .layer(CookieLayer::strict())
         )
