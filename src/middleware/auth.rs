@@ -3,12 +3,10 @@ use axum_cookie::CookieManager;
 
 use crate::{clients::auth::{self, AuthClient}, handlers::error::HandlerError, util::cookie::extract_access_token};
 
-pub async fn auth_middleware(
-    State(mut auth_client): State<AuthClient>,
+pub async fn get_user_id_from_cookies(
+    mut auth_client: AuthClient,
     cookies: CookieManager,
-    mut req: Request,
-    next: Next,
-) -> Result<Response, HandlerError> {
+) -> Result<i64, HandlerError> {
     let access_token = match extract_access_token(&cookies) {
         Ok(v) => v,
         Err(_) => return Err(HandlerError::Unauthorized),
@@ -22,6 +20,20 @@ pub async fn auth_middleware(
         Err(_) => return Err(HandlerError::Unauthorized),
     };
 
-    req.extensions_mut().insert(claims.user_id);
+    Ok(claims.user_id)
+}
+
+pub async fn auth_middleware(
+    State(auth_client): State<AuthClient>,
+    cookies: CookieManager,
+    mut req: Request,
+    next: Next,
+) -> Result<Response, HandlerError> {
+    let user_id = get_user_id_from_cookies(
+        auth_client,
+        cookies,
+    ).await?;
+    
+    req.extensions_mut().insert(user_id);
     Ok(next.run(req).await)
 }

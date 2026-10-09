@@ -1,13 +1,13 @@
 use axum::{
     Extension, Json, Router, extract::{Multipart, Path, State}, http::StatusCode, middleware::from_fn_with_state, response::{IntoResponse, Response}, routing::{get, patch, post},
 };
-use axum_cookie::CookieLayer;
+use axum_cookie::{CookieLayer, CookieManager};
 use tonic::Code;
 
 use crate::{
     clients::{
         auth::AuthClient, tracks::{TracksClient, tracks_grpc},
-    }, handlers::{error::HandlerError, tracks::dto::{CategoryRes, FullTrackRes, UploadTrackReq}}, middleware::auth::auth_middleware, util::assets::{AssetPrefix, asset_id_to_url, extract_image_data_from_multipart},
+    }, handlers::{error::HandlerError, tracks::dto::{CategoryRes, FullTrackRes, UploadTrackReq}}, middleware::auth::{auth_middleware, get_user_id_from_cookies}, util::assets::{AssetPrefix, asset_id_to_url, extract_image_data_from_multipart},
 };
 
 mod dto;
@@ -68,9 +68,10 @@ async fn update_thumbnail(
     }
 }
 
-async fn get_full_track_public(
+async fn get_full_track(
+    State((mut tracks_client, auth_client)): State<(TracksClient, AuthClient)>,
+    cookies: CookieManager,
     Path(track_id): Path<i64>,
-    State(mut tracks_client): State<TracksClient>,
 ) -> Result<Response, HandlerError> {
     let req = tracks_grpc::TrackId { id: track_id };
 
@@ -79,8 +80,11 @@ async fn get_full_track_public(
         Err(_) => return Err(HandlerError::InternalError),
     };
 
-    if let None = track_data.duration_seconds {
-        return Err(HandlerError::Unauthorized);
+    if track_data.upload_status != "uploaded" {
+        let user_id = get_user_id_from_cookies(auth_client, cookies).await?;
+        if track_data.uploader_id != user_id {
+            return Err(HandlerError::Unauthorized);
+        }
     }
 
     let thumbnail_url = asset_id_to_url(
@@ -108,7 +112,12 @@ async fn get_full_track_public(
 
 pub fn create_tracks_router(tracks_client: TracksClient, auth_client: AuthClient) -> Router {
     Router::new()
-        .route("/{track_id}/public", get(get_full_track_public))
+        .merge(
+            Router::new()
+            .route("/{track_id}", get(get_full_track))
+            .with_state((tracks_client.clone(), auth_client.clone()))
+            .layer(CookieLayer::strict())
+        )
         .merge(
             Router::new()
                 .route("/upload", post(upload_track))
