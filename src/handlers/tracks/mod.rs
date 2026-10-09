@@ -1,14 +1,13 @@
 use axum::{
-    Extension, Json, Router, extract::{Multipart, Path, State}, http::StatusCode, middleware::from_fn_with_state, response::{IntoResponse, Response}, routing::{patch, post},
+    Extension, Json, Router, extract::{Multipart, Path, State}, http::StatusCode, middleware::from_fn_with_state, response::{IntoResponse, Response}, routing::{get, patch, post},
 };
 use axum_cookie::CookieLayer;
 use tonic::Code;
 
 use crate::{
     clients::{
-        auth::AuthClient,
-        tracks::{TracksClient, tracks_grpc},
-    }, handlers::{error::HandlerError, tracks::dto::UploadTrackReq}, middleware::auth::auth_middleware, util::assets::extract_image_data_from_multipart,
+        auth::AuthClient, tracks::{TracksClient, tracks_grpc},
+    }, handlers::{error::HandlerError, tracks::dto::{CategoryRes, FullTrackRes, UploadTrackReq}}, middleware::auth::auth_middleware, util::assets::{AssetPrefix, asset_id_to_url, extract_image_data_from_multipart},
 };
 
 mod dto;
@@ -69,11 +68,54 @@ async fn update_thumbnail(
     }
 }
 
+async fn get_full_track_public(
+    Path(track_id): Path<i64>,
+    State(mut tracks_client): State<TracksClient>,
+) -> Result<Response, HandlerError> {
+    let req = tracks_grpc::TrackId { id: track_id };
+
+    let track_data = match tracks_client.get_full_track(req).await {
+        Ok(res) => res.into_inner(),
+        Err(_) => return Err(HandlerError::InternalError),
+    };
+
+    if let None = track_data.duration_seconds {
+        return Err(HandlerError::Unauthorized);
+    }
+
+    let thumbnail_url = asset_id_to_url(
+        AssetPrefix::Track,
+        track_data.thumbnail_id,
+    );
+
+    let res = FullTrackRes {
+        id: track_data.id,
+        title: track_data.title,
+        description: track_data.description,
+        thumbnail_url,
+        duration_seconds: track_data.duration_seconds,
+        play_count: track_data.play_count,
+        like_count: track_data.like_count,
+        uploader_id: track_data.uploader_id,
+        categories: track_data.categories
+            .into_iter()
+            .map(|c| CategoryRes { id: c.id, name: c.name })
+            .collect(),
+    };
+
+    Ok(Json(res).into_response())
+}
+
 pub fn create_tracks_router(tracks_client: TracksClient, auth_client: AuthClient) -> Router {
     Router::new()
-        .route("/upload", post(upload_track))
-        .route("/update-thumbnail/{track_id}", patch(update_thumbnail))
+        .route("/{track_id}/public", get(get_full_track_public))
+        .merge(
+            Router::new()
+                .route("/upload", post(upload_track))
+                .route("/update-thumbnail/{track_id}", patch(update_thumbnail))
+                .with_state(tracks_client.clone())
+                .layer(from_fn_with_state(auth_client, auth_middleware))
+                .layer(CookieLayer::strict())
+        )
         .with_state(tracks_client)
-        .layer(from_fn_with_state(auth_client, auth_middleware))
-        .layer(CookieLayer::strict())
 }
