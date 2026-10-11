@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::handlers::user::dto::BasicProfileRes;
+
 #[derive(Deserialize)]
 pub struct UploadTrackReq {
     pub title: String,
@@ -27,7 +29,11 @@ pub struct FullTrackRes {
     pub play_count: i64,
     #[serde(rename(serialize = "likeCount"))]
     pub like_count: i64,
-    #[serde(rename(serialize = "uploaderId"))]
-    pub uploader_id: i64,
+    #[serde(rename(serialize = "uploader"))]
+    pub uploader: BasicProfileRes,
     pub categories: Vec<CategoryRes>,
+    #[serde(rename(serialize = "uploadStatus"))]
+    pub upload_status: String,
+    #[serde(rename(serialize = "createdAt"))]
+    pub created_at: i64,
 }

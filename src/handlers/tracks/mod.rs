@@ -6,8 +6,8 @@ use tonic::Code;
 
 use crate::{
     clients::{
-        auth::AuthClient, tracks::{TracksClient, tracks_grpc},
-    }, handlers::{error::HandlerError, tracks::dto::{CategoryRes, FullTrackRes, UploadTrackReq}}, middleware::auth::{auth_middleware, get_user_id_from_cookies}, util::assets::{AssetPrefix, asset_id_to_url, extract_image_data_from_multipart},
+        auth::AuthClient, identity::{IdentityClient, identity_grpc}, tracks::{TracksClient, tracks_grpc},
+    }, handlers::{error::HandlerError, tracks::dto::{CategoryRes, FullTrackRes, UploadTrackReq}, user::dto::BasicProfileRes}, middleware::auth::{auth_middleware, get_user_id_from_cookies}, util::assets::{AssetPrefix, asset_id_to_url, extract_image_data_from_multipart},
 };
 
 mod dto;
@@ -69,7 +69,11 @@ async fn update_thumbnail(
 }
 
 async fn get_full_track(
-    State((mut tracks_client, auth_client)): State<(TracksClient, AuthClient)>,
+    State((
+        mut tracks_client,
+        auth_client,
+        mut identity_client,
+    )): State<(TracksClient, AuthClient, IdentityClient)>,
     cookies: CookieManager,
     Path(track_id): Path<i64>,
 ) -> Result<Response, HandlerError> {
@@ -92,6 +96,20 @@ async fn get_full_track(
         track_data.thumbnail_id,
     );
 
+    let req = identity_grpc::UserId { user_id: track_data.uploader_id };
+    let uploader_profile = match identity_client.get_basic_profile(req).await {
+        Ok(res) => {
+            let res = res.into_inner();
+            let avatar_url = asset_id_to_url(AssetPrefix::Identity, res.avatar_id);
+            BasicProfileRes {
+                user_id: res.user_id,
+                username: res.username,
+                avatar_url,
+            }
+        },
+        Err(_) => return Err(HandlerError::NotFound),
+    };
+
     let res = FullTrackRes {
         id: track_data.id,
         title: track_data.title,
@@ -100,22 +118,28 @@ async fn get_full_track(
         duration_seconds: track_data.duration_seconds,
         play_count: track_data.play_count,
         like_count: track_data.like_count,
-        uploader_id: track_data.uploader_id,
+        uploader: uploader_profile,
         categories: track_data.categories
             .into_iter()
             .map(|c| CategoryRes { id: c.id, name: c.name })
             .collect(),
+        upload_status: track_data.upload_status,
+        created_at: track_data.created_at,
     };
 
     Ok(Json(res).into_response())
 }
 
-pub fn create_tracks_router(tracks_client: TracksClient, auth_client: AuthClient) -> Router {
+pub fn create_tracks_router(
+    tracks_client: TracksClient,
+    identity_client: IdentityClient,
+    auth_client: AuthClient,
+) -> Router {
     Router::new()
         .merge(
             Router::new()
             .route("/{track_id}", get(get_full_track))
-            .with_state((tracks_client.clone(), auth_client.clone()))
+            .with_state((tracks_client.clone(), auth_client.clone(), identity_client))
             .layer(CookieLayer::strict())
         )
         .merge(
@@ -126,5 +150,4 @@ pub fn create_tracks_router(tracks_client: TracksClient, auth_client: AuthClient
                 .layer(from_fn_with_state(auth_client, auth_middleware))
                 .layer(CookieLayer::strict())
         )
-        .with_state(tracks_client)
 }

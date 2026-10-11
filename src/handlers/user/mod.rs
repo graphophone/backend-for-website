@@ -3,7 +3,7 @@ use axum_cookie::CookieLayer;
 use tonic::Code;
 use crate::{clients::{auth::AuthClient, identity::{IdentityClient, identity_grpc}}, handlers::{error::HandlerError, user::dto::{BasicProfileRes, EditProfileReq, ProfileRes}}, middleware::auth::auth_middleware, util::assets::{AssetPrefix, asset_id_to_url, extract_image_data_from_multipart}};
 
-mod dto;
+pub mod dto;
 
 #[derive(Clone)]
 struct UserState {

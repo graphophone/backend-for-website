@@ -48,6 +48,7 @@ pub async fn run(conf: config::Config) -> Result<()> {
         .nest("/categories", create_categories_router(categories_client))
         .nest("/tracks", create_tracks_router(
             tracks_client,
+            identity_client.clone(),
             auth_client.clone(),
         ))
         .layer(CorsLayer::very_permissive())
