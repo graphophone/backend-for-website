@@ -1,5 +1,5 @@
 use axum::{
-    Extension, Json, Router, extract::{Multipart, Path, State}, http::StatusCode, middleware::from_fn_with_state, response::{IntoResponse, Response}, routing::{get, patch, post},
+    Extension, Json, Router, extract::{Path, State}, http::StatusCode, middleware::from_fn_with_state, response::{IntoResponse, Response}, routing::{delete, get, patch, post},
 };
 use axum_cookie::{CookieLayer, CookieManager};
 use tonic::Code;
@@ -7,7 +7,7 @@ use tonic::Code;
 use crate::{
     clients::{
         auth::AuthClient, identity::{IdentityClient, identity_grpc}, tracks::{TracksClient, tracks_grpc},
-    }, handlers::{error::HandlerError, tracks::dto::{CategoryRes, FullTrackRes, UploadTrackReq}, user::dto::BasicProfileRes}, middleware::auth::{auth_middleware, get_user_id_from_cookies}, util::assets::{AssetPrefix, asset_id_to_url, extract_image_data_from_multipart},
+    }, handlers::{error::HandlerError, tracks::dto::{CategoryRes, FullTrackRes, UploadTrackReq}, user::dto::BasicProfileRes}, middleware::auth::{auth_middleware, get_user_id_from_cookies}, util::assets::{AssetPrefix, asset_id_to_url},
 };
 
 mod dto;
@@ -31,32 +31,71 @@ async fn upload_track(
 }
 
 #[axum::debug_handler]
-async fn update_thumbnail(
+async fn upload_thumbnail(
     State(mut tracks_client): State<TracksClient>,
     Extension(user_id): Extension<i64>,
     Path(track_id): Path<i64>,
-    image_multipart: Option<Multipart>,
+    Json(req): Json<dto::UploadThumbnailReq>,
 ) -> Result<Response, HandlerError> {
-    let image_data = extract_image_data_from_multipart(image_multipart)
-        .await?;
-
-    let image_payload = match image_data {
-        Some(data) => {
-            let image = tracks_grpc::Image {
-                image: data.image_bytes,
-                mime_type: data.mime_type,
-            };
-            Some(image)
-        },
-        None => None,
-    };
-
-    let req = tracks_grpc::UpdateTrackThumbnailReq {
+    let req = tracks_grpc::UploadThumbnailReq {
         track_id,
-        thumbnail: image_payload,
+        mime_type: req.mime_type,
         uploader_id: user_id,
     };
-    match tracks_client.update_track_thumbnail(req).await {
+    match tracks_client.upload_thumbnail(req).await {
+        Ok(res) => {
+            let res = res.into_inner();
+
+            Ok(Json(dto::UploadThumbnailRes {
+                upload_url: res.upload_url,
+                thumbnail_id: res.thumbnail_id,
+            }).into_response())
+        },
+        Err(e) => {
+            if e.code().eq(&Code::AlreadyExists) {
+                Err(HandlerError::Conflict)
+            } else {
+                Err(HandlerError::InternalError)
+            }
+        },
+    }
+}
+
+#[axum::debug_handler]
+async fn notify_upload_thumbnail(
+    State(mut tracks_client): State<TracksClient>,
+    Extension(user_id): Extension<i64>,
+    Path(track_id): Path<i64>,
+    Json(req): Json<dto::NotifyUploadThumbnailReq>,
+) -> Result<Response, HandlerError> {
+    let req = tracks_grpc::NotifyUploadThumbnailReq {
+        track_id,
+        thumbnail_id: req.thumbnail_id,
+        uploader_id: user_id,
+    };
+    match tracks_client.notify_upload_thumbnail(req).await {
+        Ok(_) => Ok(StatusCode::OK.into_response()),
+        Err(e) => {
+            if e.code().eq(&Code::AlreadyExists) {
+                Err(HandlerError::Conflict)
+            } else {
+                Err(HandlerError::InternalError)
+            }
+        },
+    }
+}
+
+#[axum::debug_handler]
+async fn remove_thumbnail(
+    State(mut tracks_client): State<TracksClient>,
+    Extension(user_id): Extension<i64>,
+    Path(track_id): Path<i64>,
+) -> Result<Response, HandlerError> {
+    let req = tracks_grpc::RemoveThumbnailReq {
+        track_id,
+        uploader_id: user_id,
+    };
+    match tracks_client.remove_thumbnail(req).await {
         Ok(_) => Ok(StatusCode::OK.into_response()),
         Err(e) => {
             if e.code().eq(&Code::AlreadyExists) {
@@ -145,7 +184,9 @@ pub fn create_tracks_router(
         .merge(
             Router::new()
                 .route("/upload", post(upload_track))
-                .route("/update-thumbnail/{track_id}", patch(update_thumbnail))
+                .route("/upload-thumbnail/{track_id}", patch(upload_thumbnail))
+                .route("/remove-thumbnail/{track_id}", delete(remove_thumbnail))
+                .route("/notify-upload-thumbnail/{track_id}", patch(notify_upload_thumbnail))
                 .with_state(tracks_client.clone())
                 .layer(from_fn_with_state(auth_client, auth_middleware))
                 .layer(CookieLayer::strict())

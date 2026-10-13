@@ -10,6 +10,26 @@ pub struct UploadTrackReq {
     pub categories_ids: Vec<i64>,
 }
 
+#[derive(Deserialize)]
+pub struct UploadThumbnailReq {
+    #[serde(rename(deserialize = "mimeType"))]
+    pub mime_type: String,
+}
+
+#[derive(Serialize)]
+pub struct UploadThumbnailRes {
+    #[serde(rename(serialize = "uploadUrl"))]
+    pub upload_url: String,
+    #[serde(rename(serialize = "thumbnailId"))]
+    pub thumbnail_id: String,
+}
+
+#[derive(Deserialize)]
+pub struct NotifyUploadThumbnailReq {
+    #[serde(rename(deserialize = "thumbnailId"))]
+    pub thumbnail_id: String,
+}
+
 #[derive(Serialize)]
 pub struct CategoryRes {
     pub id: i64,
