@@ -1,7 +1,7 @@
-use axum::{Extension, Json, Router, extract::{Multipart, Path, State}, http::StatusCode, middleware::from_fn_with_state, response::{IntoResponse, Response}, routing::{get, put}};
+use axum::{Extension, Json, Router, extract::{Path, Query, State}, http::StatusCode, middleware::from_fn_with_state, response::{IntoResponse, Response}, routing::{delete, get, patch, put}};
 use axum_cookie::CookieLayer;
 use tonic::Code;
-use crate::{clients::{auth::AuthClient, identity::{IdentityClient, identity_grpc}}, handlers::{error::HandlerError, user::dto::{BasicProfileRes, EditProfileReq, ProfileRes}}, middleware::auth::auth_middleware, util::assets::{AssetPrefix, asset_id_to_url, extract_image_data_from_multipart}};
+use crate::{clients::{auth::AuthClient, identity::{IdentityClient, identity_grpc}}, handlers::{error::HandlerError, user::dto::{BasicProfileRes, EditProfileReq, ImageTypeQuery, ProfileRes}}, middleware::auth::auth_middleware, util::assets::{AssetPrefix, asset_id_to_url}};
 
 pub mod dto;
 
@@ -129,32 +129,55 @@ async fn update_my_profile(
 }
 
 #[axum::debug_handler]
-async fn update_my_avatar(
+async fn request_upload_image(
     State(state): State<UserState>,
     Extension(user_id): Extension<i64>,
-    image_multipart: Option<Multipart>,
+    Json(req): Json<dto::UploadImageReq>,
 ) -> Result<Response, HandlerError> {
     let mut identity_client = state.identity_client;
 
-    let image_data = extract_image_data_from_multipart(image_multipart)
-        .await?;
-
-    let image_payload = match image_data {
-        Some(data) => {
-            let image = identity_grpc::Image {
-                image: data.image_bytes,
-                mime_type: data.mime_type,
-            };
-            Some(image)
-        },
-        None => None,
-    };
-
-    let req = identity_grpc::UpdateAvatarReq {
+    let req = identity_grpc::UploadImageReq {
         user_id,
-        avatar: image_payload,
+        mime_type: req.mime_type,
     };
-    match identity_client.update_avatar(req).await {
+    match identity_client.request_upload_image(req).await {
+        Ok(res) => {
+            let res = res.into_inner();
+
+            Ok(Json(dto::UploadImageRes {
+                upload_url: res.upload_url,
+                image_id: res.image_id,
+            }).into_response())
+        },
+        Err(e) => {
+            if e.code().eq(&Code::AlreadyExists) {
+                Err(HandlerError::Conflict)
+            } else {
+                Err(HandlerError::InternalError)
+            }
+        },
+    }
+}
+
+#[axum::debug_handler]
+async fn notify_upload_image(
+    State(state): State<UserState>,
+    Extension(user_id): Extension<i64>,
+    Query(query): Query<ImageTypeQuery>,
+    Json(req): Json<dto::NotifyUploadImageReq>,
+) -> Result<Response, HandlerError> {
+    let mut identity_client = state.identity_client;
+
+    let req = identity_grpc::NotifyUploadImageReq {
+        user_id,
+        image_id: req.image_id,
+    };
+    let res = match query.image_type.as_ref() {
+        "avatar" => identity_client.notify_upload_avatar(req).await,
+        "banner" => identity_client.notify_upload_banner(req).await,
+        _ => return Err(HandlerError::BadRequest("unknown image type".to_string())),
+    };
+    match res {
         Ok(_) => Ok(StatusCode::OK.into_response()),
         Err(e) => {
             if e.code().eq(&Code::AlreadyExists) {
@@ -167,32 +190,23 @@ async fn update_my_avatar(
 }
 
 #[axum::debug_handler]
-async fn update_my_banner(
+async fn remove_image(
     State(state): State<UserState>,
     Extension(user_id): Extension<i64>,
-    image_multipart: Option<Multipart>,
+    Query(query): Query<ImageTypeQuery>,
 ) -> Result<Response, HandlerError> {
     let mut identity_client = state.identity_client;
 
-    let image_data = extract_image_data_from_multipart(image_multipart)
-        .await?;
-
-    let image_payload = match image_data {
-        Some(data) => {
-            let image = identity_grpc::Image {
-                image: data.image_bytes,
-                mime_type: data.mime_type,
-            };
-            Some(image)
-        },
-        None => None,
-    };
-
-    let req = identity_grpc::UpdateBannerReq {
+    let req = identity_grpc::RemoveImageReq {
         user_id,
-        banner: image_payload,
     };
-    match identity_client.update_banner(req).await {
+
+    let res = match query.image_type.as_ref() {
+        "avatar" => identity_client.remove_avatar(req).await,
+        "banner" => identity_client.remove_banner(req).await,
+        _ => return Err(HandlerError::BadRequest("unknown image type".to_string())),
+    };
+    match res {
         Ok(_) => Ok(StatusCode::OK.into_response()),
         Err(e) => {
             if e.code().eq(&Code::AlreadyExists) {
@@ -214,8 +228,9 @@ pub fn create_user_router(
             .route("/me", get(get_my_basic_profile))
             .route("/full-profile", get(get_my_full_profile))
             .route("/update-profile", put(update_my_profile))
-            .route("/update-avatar", put(update_my_avatar))
-            .route("/update-banner", put(update_my_banner))
+            .route("/request-upload-image", patch(request_upload_image))
+            .route("/notify-upload-image", patch(notify_upload_image))
+            .route("/remove-image", delete(remove_image))
             .layer(from_fn_with_state(auth_client, auth_middleware))
             .layer(CookieLayer::strict())
         )

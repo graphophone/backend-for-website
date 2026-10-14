@@ -31,7 +31,7 @@ async fn upload_track(
 }
 
 #[axum::debug_handler]
-async fn upload_thumbnail(
+async fn request_upload_thumbnail(
     State(mut tracks_client): State<TracksClient>,
     Extension(user_id): Extension<i64>,
     Path(track_id): Path<i64>,
@@ -48,7 +48,7 @@ async fn upload_thumbnail(
 
             Ok(Json(dto::UploadThumbnailRes {
                 upload_url: res.upload_url,
-                thumbnail_id: res.thumbnail_id,
+                image_id: res.thumbnail_id,
             }).into_response())
         },
         Err(e) => {
@@ -70,7 +70,7 @@ async fn notify_upload_thumbnail(
 ) -> Result<Response, HandlerError> {
     let req = tracks_grpc::NotifyUploadThumbnailReq {
         track_id,
-        thumbnail_id: req.thumbnail_id,
+        thumbnail_id: req.image_id,
         uploader_id: user_id,
     };
     match tracks_client.notify_upload_thumbnail(req).await {
@@ -184,9 +184,9 @@ pub fn create_tracks_router(
         .merge(
             Router::new()
                 .route("/upload", post(upload_track))
-                .route("/upload-thumbnail/{track_id}", patch(upload_thumbnail))
-                .route("/remove-thumbnail/{track_id}", delete(remove_thumbnail))
-                .route("/notify-upload-thumbnail/{track_id}", patch(notify_upload_thumbnail))
+                .route("/request-upload-image/{track_id}", patch(request_upload_thumbnail))
+                .route("/remove-image/{track_id}", delete(remove_thumbnail))
+                .route("/notify-upload-image/{track_id}", patch(notify_upload_thumbnail))
                 .with_state(tracks_client.clone())
                 .layer(from_fn_with_state(auth_client, auth_middleware))
                 .layer(CookieLayer::strict())

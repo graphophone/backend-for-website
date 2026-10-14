@@ -20,14 +20,14 @@ pub struct UploadThumbnailReq {
 pub struct UploadThumbnailRes {
     #[serde(rename(serialize = "uploadUrl"))]
     pub upload_url: String,
-    #[serde(rename(serialize = "thumbnailId"))]
-    pub thumbnail_id: String,
+    #[serde(rename(serialize = "imageId"))]
+    pub image_id: String,
 }
 
 #[derive(Deserialize)]
 pub struct NotifyUploadThumbnailReq {
-    #[serde(rename(deserialize = "thumbnailId"))]
-    pub thumbnail_id: String,
+    #[serde(rename(deserialize = "imageId"))]
+    pub image_id: String,
 }
 
 #[derive(Serialize)]

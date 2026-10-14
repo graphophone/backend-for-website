@@ -43,3 +43,29 @@ pub struct EditProfileReq {
     pub country: Option<String>,
     pub city: Option<String>,
 }
+
+#[derive(Deserialize)]
+pub struct UploadImageReq {
+    #[serde(rename(deserialize = "mimeType"))]
+    pub mime_type: String,
+}
+
+#[derive(Serialize)]
+pub struct UploadImageRes {
+    #[serde(rename(serialize = "uploadUrl"))]
+    pub upload_url: String,
+    #[serde(rename(serialize = "imageId"))]
+    pub image_id: String,
+}
+
+#[derive(Deserialize)]
+pub struct NotifyUploadImageReq {
+    #[serde(rename(deserialize = "imageId"))]
+    pub image_id: String,
+}
+
+#[derive(Deserialize)]
+pub struct ImageTypeQuery {
+    #[serde(rename(deserialize = "imageType"))]
+    pub image_type: String,
+}
