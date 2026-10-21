@@ -1,13 +1,27 @@
 use axum::{
-    Extension, Json, Router, extract::{Path, State}, http::StatusCode, middleware::from_fn_with_state, response::{IntoResponse, Response}, routing::{delete, get, patch, post},
+    Extension, Json, Router,
+    extract::{Path, State},
+    http::StatusCode,
+    middleware::from_fn_with_state,
+    response::{IntoResponse, Response},
+    routing::{delete, get, patch, post},
 };
 use axum_cookie::{CookieLayer, CookieManager};
 use tonic::Code;
 
 use crate::{
     clients::{
-        auth::AuthClient, identity::{IdentityClient, identity_grpc}, tracks::{TracksClient, tracks_grpc},
-    }, handlers::{error::HandlerError, tracks::dto::{CategoryRes, FullTrackRes, UploadTrackReq}, user::dto::BasicProfileRes}, middleware::auth::{auth_middleware, get_user_id_from_cookies}, util::assets::{AssetPrefix, asset_id_to_url},
+        auth::AuthClient,
+        identity::{IdentityClient, identity_grpc},
+        tracks::{TracksClient, tracks_grpc},
+    },
+    handlers::{
+        error::HandlerError,
+        tracks::dto::{CategoryRes, FullTrackRes, UploadTrackReq},
+        user::dto::BasicProfileRes,
+    },
+    middleware::auth::{auth_middleware, get_user_id_from_cookies},
+    util::assets::{AssetPrefix, asset_id_to_url},
 };
 
 mod dto;
@@ -37,7 +51,7 @@ async fn request_upload_thumbnail(
     Path(track_id): Path<i64>,
     Json(req): Json<dto::UploadThumbnailReq>,
 ) -> Result<Response, HandlerError> {
-    let req = tracks_grpc::UploadThumbnailReq {
+    let req = tracks_grpc::UploadReq {
         track_id,
         mime_type: req.mime_type,
         uploader_id: user_id,
@@ -48,16 +62,17 @@ async fn request_upload_thumbnail(
 
             Ok(Json(dto::UploadThumbnailRes {
                 upload_url: res.upload_url,
-                image_id: res.thumbnail_id,
-            }).into_response())
-        },
+                image_id: res.asset_id,
+            })
+            .into_response())
+        }
         Err(e) => {
             if e.code().eq(&Code::AlreadyExists) {
                 Err(HandlerError::Conflict)
             } else {
                 Err(HandlerError::InternalError)
             }
-        },
+        }
     }
 }
 
@@ -68,9 +83,9 @@ async fn notify_upload_thumbnail(
     Path(track_id): Path<i64>,
     Json(req): Json<dto::NotifyUploadThumbnailReq>,
 ) -> Result<Response, HandlerError> {
-    let req = tracks_grpc::NotifyUploadThumbnailReq {
+    let req = tracks_grpc::NotifyUploadReq {
         track_id,
-        thumbnail_id: req.image_id,
+        asset_id: req.image_id,
         uploader_id: user_id,
     };
     match tracks_client.notify_upload_thumbnail(req).await {
@@ -81,7 +96,7 @@ async fn notify_upload_thumbnail(
             } else {
                 Err(HandlerError::InternalError)
             }
-        },
+        }
     }
 }
 
@@ -103,16 +118,16 @@ async fn remove_thumbnail(
             } else {
                 Err(HandlerError::InternalError)
             }
-        },
+        }
     }
 }
 
 async fn get_full_track(
-    State((
-        mut tracks_client,
-        auth_client,
-        mut identity_client,
-    )): State<(TracksClient, AuthClient, IdentityClient)>,
+    State((mut tracks_client, auth_client, mut identity_client)): State<(
+        TracksClient,
+        AuthClient,
+        IdentityClient,
+    )>,
     cookies: CookieManager,
     Path(track_id): Path<i64>,
 ) -> Result<Response, HandlerError> {
@@ -130,12 +145,11 @@ async fn get_full_track(
         }
     }
 
-    let thumbnail_url = asset_id_to_url(
-        AssetPrefix::Track,
-        track_data.thumbnail_id,
-    );
+    let thumbnail_url = asset_id_to_url(AssetPrefix::Track, track_data.thumbnail_id);
 
-    let req = identity_grpc::UserId { user_id: track_data.uploader_id };
+    let req = identity_grpc::UserId {
+        user_id: track_data.uploader_id,
+    };
     let uploader_profile = match identity_client.get_basic_profile(req).await {
         Ok(res) => {
             let res = res.into_inner();
@@ -145,7 +159,7 @@ async fn get_full_track(
                 username: res.username,
                 avatar_url,
             }
-        },
+        }
         Err(_) => return Err(HandlerError::NotFound),
     };
 
@@ -158,9 +172,13 @@ async fn get_full_track(
         play_count: track_data.play_count,
         like_count: track_data.like_count,
         uploader: uploader_profile,
-        categories: track_data.categories
+        categories: track_data
+            .categories
             .into_iter()
-            .map(|c| CategoryRes { id: c.id, name: c.name })
+            .map(|c| CategoryRes {
+                id: c.id,
+                name: c.name,
+            })
             .collect(),
         upload_status: track_data.upload_status,
         created_at: track_data.created_at,
@@ -177,18 +195,24 @@ pub fn create_tracks_router(
     Router::new()
         .merge(
             Router::new()
-            .route("/{track_id}", get(get_full_track))
-            .with_state((tracks_client.clone(), auth_client.clone(), identity_client))
-            .layer(CookieLayer::strict())
+                .route("/{track_id}", get(get_full_track))
+                .with_state((tracks_client.clone(), auth_client.clone(), identity_client))
+                .layer(CookieLayer::strict()),
         )
         .merge(
             Router::new()
                 .route("/upload", post(upload_track))
-                .route("/request-upload-image/{track_id}", patch(request_upload_thumbnail))
+                .route(
+                    "/request-upload-image/{track_id}",
+                    patch(request_upload_thumbnail),
+                )
                 .route("/remove-image/{track_id}", delete(remove_thumbnail))
-                .route("/notify-upload-image/{track_id}", patch(notify_upload_thumbnail))
+                .route(
+                    "/notify-upload-image/{track_id}",
+                    patch(notify_upload_thumbnail),
+                )
                 .with_state(tracks_client.clone())
                 .layer(from_fn_with_state(auth_client, auth_middleware))
-                .layer(CookieLayer::strict())
+                .layer(CookieLayer::strict()),
         )
 }
