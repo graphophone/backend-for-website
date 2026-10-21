@@ -49,9 +49,9 @@ async fn request_upload_thumbnail(
     State(mut tracks_client): State<TracksClient>,
     Extension(user_id): Extension<i64>,
     Path(track_id): Path<i64>,
-    Json(req): Json<dto::UploadThumbnailReq>,
+    Json(req): Json<dto::UplodaReq>,
 ) -> Result<Response, HandlerError> {
-    let req = tracks_grpc::UploadReq {
+    let req = tracks_grpc::UploadAssetReq {
         track_id,
         mime_type: req.mime_type,
         uploader_id: user_id,
@@ -60,9 +60,9 @@ async fn request_upload_thumbnail(
         Ok(res) => {
             let res = res.into_inner();
 
-            Ok(Json(dto::UploadThumbnailRes {
+            Ok(Json(dto::UploadAssetRes {
                 upload_url: res.upload_url,
-                image_id: res.asset_id,
+                asset_id: res.asset_id,
             })
             .into_response())
         }
@@ -81,11 +81,11 @@ async fn notify_upload_thumbnail(
     State(mut tracks_client): State<TracksClient>,
     Extension(user_id): Extension<i64>,
     Path(track_id): Path<i64>,
-    Json(req): Json<dto::NotifyUploadThumbnailReq>,
+    Json(req): Json<dto::NotifyUploadAssetReq>,
 ) -> Result<Response, HandlerError> {
-    let req = tracks_grpc::NotifyUploadReq {
+    let req = tracks_grpc::NotifyUploadAssetReq {
         track_id,
-        asset_id: req.image_id,
+        asset_id: req.asset_id,
         uploader_id: user_id,
     };
     match tracks_client.notify_upload_thumbnail(req).await {
@@ -187,6 +187,56 @@ async fn get_full_track(
     Ok(Json(res).into_response())
 }
 
+#[axum::debug_handler]
+async fn request_upload_audio(
+    State(mut tracks_client): State<TracksClient>,
+    Extension(user_id): Extension<i64>,
+    Path(track_id): Path<i64>,
+    Json(req): Json<dto::UplodaReq>,
+) -> Result<Response, HandlerError> {
+    let req = tracks_grpc::UploadAssetReq {
+        track_id,
+        mime_type: req.mime_type,
+        uploader_id: user_id,
+    };
+    match tracks_client.upload_thumbnail(req).await {
+        Ok(res) => {
+            let res = res.into_inner();
+
+            Ok(Json(dto::UploadAssetRes {
+                upload_url: res.upload_url,
+                asset_id: res.asset_id,
+            })
+            .into_response())
+        }
+        Err(e) => {
+            if e.code().eq(&Code::AlreadyExists) {
+                Err(HandlerError::Conflict)
+            } else {
+                Err(HandlerError::InternalError)
+            }
+        }
+    }
+}
+
+#[axum::debug_handler]
+async fn notify_upload_audio(
+    State(mut tracks_client): State<TracksClient>,
+    Extension(user_id): Extension<i64>,
+    Path(track_id): Path<i64>,
+    Json(req): Json<dto::NotifyUploadAssetReq>,
+) -> Result<Response, HandlerError> {
+    let req = tracks_grpc::NotifyUploadAssetReq {
+        track_id,
+        asset_id: req.asset_id,
+        uploader_id: user_id,
+    };
+    match tracks_client.notify_upload_track_audio(req).await {
+        Ok(_) => Ok(StatusCode::OK.into_response()),
+        Err(_) => Err(HandlerError::InternalError),
+    }
+}
+
 pub fn create_tracks_router(
     tracks_client: TracksClient,
     identity_client: IdentityClient,
@@ -206,11 +256,19 @@ pub fn create_tracks_router(
                     "/request-upload-image/{track_id}",
                     patch(request_upload_thumbnail),
                 )
-                .route("/remove-image/{track_id}", delete(remove_thumbnail))
                 .route(
                     "/notify-upload-image/{track_id}",
                     patch(notify_upload_thumbnail),
                 )
+                .route(
+                    "/request-upload-audio/{track_id}",
+                    patch(request_upload_audio),
+                )
+                .route(
+                    "/notify-upload-audio/{track_id}",
+                    patch(notify_upload_audio),
+                )
+                .route("/remove-image/{track_id}", delete(remove_thumbnail))
                 .with_state(tracks_client.clone())
                 .layer(from_fn_with_state(auth_client, auth_middleware))
                 .layer(CookieLayer::strict()),

@@ -6,11 +6,11 @@ service Tracks {
     rpc GetFullTrack(TrackId) returns (FullTrack);
     rpc UploadTrack(UploadTrackReq) returns (TrackId);
     rpc UpdateTrack(UpdateTrackReq) returns (Empty);
-    rpc UploadThumbnail(UploadReq) returns (UploadRes);
-    rpc NotifyUploadThumbnail(NotifyUploadReq) returns (Empty);
+    rpc UploadThumbnail(UploadAssetReq) returns (UploadAssetRes);
+    rpc NotifyUploadThumbnail(NotifyUploadAssetReq) returns (Empty);
     rpc RemoveThumbnail(RemoveThumbnailReq) returns (Empty);
-    rpc UploadTrackAudio(UploadReq) returns (UploadRes);
-    rpc NotifyUploadTrackAudio(NotifyUploadReq) returns (Empty);
+    rpc UploadTrackAudio(UploadAssetReq) returns (UploadAssetRes);
+    rpc NotifyUploadTrackAudio(NotifyUploadAssetReq) returns (Empty);
     rpc RemoveTrack(RemoveTrackReq) returns (Empty);
     rpc LinkTrackAudio(LinkTrackAudioReq) returns (Empty);
     rpc GeneratePlayToken(TrackId) returns (PlayToken);
@@ -33,7 +33,7 @@ message UpdateTrackReq {
     int64 uploader_id = 5;
 }
 
-message UploadReq {
+message UploadAssetReq {
     int64 track_id = 1;
     string mime_type = 2;
     int64 uploader_id = 3;
@@ -45,12 +45,12 @@ message UploadTrackAudioReq {
 
 }
 
-message UploadRes {
+message UploadAssetRes {
     string upload_url = 1;
     string asset_id = 2;
 }
 
-message NotifyUploadReq {
+message NotifyUploadAssetReq {
     int64 track_id = 1;
     string asset_id = 2;
     int64 uploader_id = 3;

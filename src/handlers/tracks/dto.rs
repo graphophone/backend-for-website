@@ -11,23 +11,23 @@ pub struct UploadTrackReq {
 }
 
 #[derive(Deserialize)]
-pub struct UploadThumbnailReq {
+pub struct UplodaReq {
     #[serde(rename(deserialize = "mimeType"))]
     pub mime_type: String,
 }
 
 #[derive(Serialize)]
-pub struct UploadThumbnailRes {
+pub struct UploadAssetRes {
     #[serde(rename(serialize = "uploadUrl"))]
     pub upload_url: String,
     #[serde(rename(serialize = "imageId"))]
-    pub image_id: String,
+    pub asset_id: String,
 }
 
 #[derive(Deserialize)]
-pub struct NotifyUploadThumbnailReq {
+pub struct NotifyUploadAssetReq {
     #[serde(rename(deserialize = "imageId"))]
-    pub image_id: String,
+    pub asset_id: String,
 }
 
 #[derive(Serialize)]
