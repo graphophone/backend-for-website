@@ -199,7 +199,7 @@ async fn request_upload_audio(
         mime_type: req.mime_type,
         uploader_id: user_id,
     };
-    match tracks_client.upload_thumbnail(req).await {
+    match tracks_client.upload_track_audio(req).await {
         Ok(res) => {
             let res = res.into_inner();
 

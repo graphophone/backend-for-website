@@ -54,13 +54,13 @@ pub struct UploadImageReq {
 pub struct UploadImageRes {
     #[serde(rename(serialize = "uploadUrl"))]
     pub upload_url: String,
-    #[serde(rename(serialize = "imageId"))]
+    #[serde(rename(serialize = "assetId"))]
     pub image_id: String,
 }
 
 #[derive(Deserialize)]
 pub struct NotifyUploadImageReq {
-    #[serde(rename(deserialize = "imageId"))]
+    #[serde(rename(deserialize = "assetId"))]
     pub image_id: String,
 }
 

@@ -8,10 +8,11 @@ impl std::string::ToString for AssetPrefix {
         match self {
             AssetPrefix::Identity => "identity",
             AssetPrefix::Track => "track",
-        }.to_string()
+        }
+        .to_string()
     }
 }
 
 pub fn asset_id_to_url(prefix: AssetPrefix, id: Option<String>) -> Option<String> {
-    id.map(|v| format!("/{}/assets/{v}", prefix.to_string()))
+    id.map(|v| format!("/{}/{v}", prefix.to_string()))
 }

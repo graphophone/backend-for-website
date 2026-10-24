@@ -1,7 +1,25 @@
-use axum::{Extension, Json, Router, extract::{Path, Query, State}, http::StatusCode, middleware::from_fn_with_state, response::{IntoResponse, Response}, routing::{delete, get, patch, put}};
+use crate::{
+    clients::{
+        auth::AuthClient,
+        identity::{IdentityClient, identity_grpc},
+    },
+    handlers::{
+        error::HandlerError,
+        user::dto::{BasicProfileRes, EditProfileReq, ImageTypeQuery, ProfileRes},
+    },
+    middleware::auth::auth_middleware,
+    util::assets::{AssetPrefix, asset_id_to_url},
+};
+use axum::{
+    Extension, Json, Router,
+    extract::{Path, Query, State},
+    http::StatusCode,
+    middleware::from_fn_with_state,
+    response::{IntoResponse, Response},
+    routing::{delete, get, patch, put},
+};
 use axum_cookie::CookieLayer;
 use tonic::Code;
-use crate::{clients::{auth::AuthClient, identity::{IdentityClient, identity_grpc}}, handlers::{error::HandlerError, user::dto::{BasicProfileRes, EditProfileReq, ImageTypeQuery, ProfileRes}}, middleware::auth::auth_middleware, util::assets::{AssetPrefix, asset_id_to_url}};
 
 pub mod dto;
 
@@ -16,12 +34,15 @@ async fn get_user_profile(
     State(state): State<UserState>,
 ) -> Result<Response, HandlerError> {
     let mut identity_client = state.identity_client;
-    
-    let req = identity_grpc::FullProfileReq { user_id, with_email: false };
+
+    let req = identity_grpc::FullProfileReq {
+        user_id,
+        with_email: false,
+    };
     match identity_client.get_full_profile(req).await {
         Ok(res) => {
             let profile = res.into_inner();
-            
+
             let avatar_url = asset_id_to_url(AssetPrefix::Identity, profile.avatar_id);
             let banner_url = asset_id_to_url(AssetPrefix::Identity, profile.banner_id);
 
@@ -38,7 +59,7 @@ async fn get_user_profile(
                 city: profile.city,
             };
             Ok(Json(res).into_response())
-        },
+        }
         Err(_) => Err(HandlerError::NotFound),
     }
 }
@@ -60,8 +81,9 @@ async fn get_my_basic_profile(
                 user_id: res.user_id,
                 username: res.username,
                 avatar_url,
-            }).into_response())
-        },
+            })
+            .into_response())
+        }
         Err(_) => Err(HandlerError::NotFound),
     }
 }
@@ -73,7 +95,10 @@ async fn get_my_full_profile(
 ) -> Result<Response, HandlerError> {
     let mut identity_client = state.identity_client;
 
-    let req = identity_grpc::FullProfileReq { user_id, with_email: true };
+    let req = identity_grpc::FullProfileReq {
+        user_id,
+        with_email: true,
+    };
     match identity_client.get_full_profile(req).await {
         Ok(res) => {
             let res = res.into_inner();
@@ -92,8 +117,9 @@ async fn get_my_full_profile(
                 bio: res.bio,
                 country: res.country,
                 city: res.city,
-            }).into_response())
-        },
+            })
+            .into_response())
+        }
         Err(_) => Err(HandlerError::NotFound),
     }
 }
@@ -124,7 +150,7 @@ async fn update_my_profile(
             } else {
                 Err(HandlerError::InternalError)
             }
-        },
+        }
     }
 }
 
@@ -147,15 +173,16 @@ async fn request_upload_image(
             Ok(Json(dto::UploadImageRes {
                 upload_url: res.upload_url,
                 image_id: res.image_id,
-            }).into_response())
-        },
+            })
+            .into_response())
+        }
         Err(e) => {
             if e.code().eq(&Code::AlreadyExists) {
                 Err(HandlerError::Conflict)
             } else {
                 Err(HandlerError::InternalError)
             }
-        },
+        }
     }
 }
 
@@ -185,7 +212,7 @@ async fn notify_upload_image(
             } else {
                 Err(HandlerError::InternalError)
             }
-        },
+        }
     }
 }
 
@@ -197,9 +224,7 @@ async fn remove_image(
 ) -> Result<Response, HandlerError> {
     let mut identity_client = state.identity_client;
 
-    let req = identity_grpc::RemoveImageReq {
-        user_id,
-    };
+    let req = identity_grpc::RemoveImageReq { user_id };
 
     let res = match query.image_type.as_ref() {
         "avatar" => identity_client.remove_avatar(req).await,
@@ -214,25 +239,23 @@ async fn remove_image(
             } else {
                 Err(HandlerError::InternalError)
             }
-        },
+        }
     }
 }
 
-pub fn create_user_router(
-    auth_client: AuthClient,
-    identity_client: IdentityClient,
-) -> Router {
+pub fn create_user_router(auth_client: AuthClient, identity_client: IdentityClient) -> Router {
     Router::new()
         .route("/{user_id}", get(get_user_profile))
-        .merge(Router::new()
-            .route("/me", get(get_my_basic_profile))
-            .route("/full-profile", get(get_my_full_profile))
-            .route("/update-profile", put(update_my_profile))
-            .route("/request-upload-image", patch(request_upload_image))
-            .route("/notify-upload-image", patch(notify_upload_image))
-            .route("/remove-image", delete(remove_image))
-            .layer(from_fn_with_state(auth_client, auth_middleware))
-            .layer(CookieLayer::strict())
+        .merge(
+            Router::new()
+                .route("/me", get(get_my_basic_profile))
+                .route("/full-profile", get(get_my_full_profile))
+                .route("/update-profile", put(update_my_profile))
+                .route("/request-upload-image", patch(request_upload_image))
+                .route("/notify-upload-image", patch(notify_upload_image))
+                .route("/remove-image", delete(remove_image))
+                .layer(from_fn_with_state(auth_client, auth_middleware))
+                .layer(CookieLayer::strict()),
         )
         .with_state(UserState { identity_client })
 }
