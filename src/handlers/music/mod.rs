@@ -21,7 +21,6 @@ use crate::{
         user::dto::BasicProfileRes,
     },
     middleware::auth::{auth_middleware, get_user_id_from_cookies},
-    util::assets::{AssetPrefix, asset_id_to_url},
 };
 
 mod dto;
@@ -145,19 +144,16 @@ async fn get_full_music(
         }
     }
 
-    let thumbnail_url = asset_id_to_url(AssetPrefix::Music, music_data.thumbnail_id);
-
     let req = identity_grpc::UserId {
         user_id: music_data.uploader_id,
     };
     let uploader_profile = match identity_client.get_basic_profile(req).await {
         Ok(res) => {
             let res = res.into_inner();
-            let avatar_url = asset_id_to_url(AssetPrefix::Identity, res.avatar_id);
             BasicProfileRes {
                 user_id: res.user_id,
                 username: res.username,
-                avatar_url,
+                avatar_url: res.avatar_id,
             }
         }
         Err(_) => return Err(HandlerError::NotFound),
@@ -167,7 +163,7 @@ async fn get_full_music(
         id: music_data.id,
         title: music_data.title,
         description: music_data.description,
-        thumbnail_url,
+        thumbnail_url: music_data.thumbnail_id,
         duration_seconds: music_data.duration_seconds,
         play_count: music_data.play_count,
         like_count: music_data.like_count,

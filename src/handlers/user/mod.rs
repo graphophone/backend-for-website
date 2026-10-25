@@ -8,7 +8,6 @@ use crate::{
         user::dto::{BasicProfileRes, EditProfileReq, ImageTypeQuery, ProfileRes},
     },
     middleware::auth::auth_middleware,
-    util::assets::{AssetPrefix, asset_id_to_url},
 };
 use axum::{
     Extension, Json, Router,
@@ -43,15 +42,12 @@ async fn get_user_profile(
         Ok(res) => {
             let profile = res.into_inner();
 
-            let avatar_url = asset_id_to_url(AssetPrefix::Identity, profile.avatar_id);
-            let banner_url = asset_id_to_url(AssetPrefix::Identity, profile.banner_id);
-
             let res = ProfileRes {
                 user_id: profile.user_id,
                 username: profile.username,
                 email: None,
-                avatar_url,
-                banner_url,
+                avatar_url: profile.avatar_id,
+                banner_url: profile.banner_id,
                 first_name: profile.first_name,
                 last_name: profile.last_name,
                 bio: profile.bio,
@@ -76,11 +72,10 @@ async fn get_my_basic_profile(
         Ok(res) => {
             let res = res.into_inner();
 
-            let avatar_url = asset_id_to_url(AssetPrefix::Identity, res.avatar_id);
             Ok(Json(BasicProfileRes {
                 user_id: res.user_id,
                 username: res.username,
-                avatar_url,
+                avatar_url: res.avatar_id,
             })
             .into_response())
         }
@@ -103,15 +98,12 @@ async fn get_my_full_profile(
         Ok(res) => {
             let res = res.into_inner();
 
-            let avatar_url = asset_id_to_url(AssetPrefix::Identity, res.avatar_id);
-            let banner_url = asset_id_to_url(AssetPrefix::Identity, res.banner_id);
-
             Ok(Json(ProfileRes {
                 user_id: res.user_id,
                 username: res.username,
                 email: res.email,
-                avatar_url,
-                banner_url,
+                avatar_url: res.avatar_id,
+                banner_url: res.banner_id,
                 first_name: res.first_name,
                 last_name: res.last_name,
                 bio: res.bio,

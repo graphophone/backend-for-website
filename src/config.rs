@@ -1,6 +1,6 @@
-use std::{fs, time::Duration};
 use anyhow::Result;
 use serde::{Deserialize, Deserializer};
+use std::{fs, time::Duration};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -22,7 +22,6 @@ pub struct ServicesConfig {
     pub identity: String,
     pub auth: String,
     pub music_catalog: String,
-    pub music_storage: String,
     pub social: String,
 }
 

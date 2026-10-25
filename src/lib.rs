@@ -68,6 +68,7 @@ pub async fn run(conf: config::Config) -> Result<()> {
 
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
 
+    println!("backend for frontend started");
     axum::serve(listener, router)
         .await
         .map_err(anyhow::Error::from)
