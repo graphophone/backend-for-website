@@ -13,11 +13,11 @@ use crate::{
     clients::{
         auth::AuthClient,
         identity::{IdentityClient, identity_grpc},
-        tracks::{TracksClient, tracks_grpc},
+        music::{MusicClient, music_grpc},
     },
     handlers::{
         error::HandlerError,
-        tracks::dto::{CategoryRes, FullTrackRes, UploadTrackReq},
+        music::dto::{CategoryRes, FullMusicRes, UploadMusicReq},
         user::dto::BasicProfileRes,
     },
     middleware::auth::{auth_middleware, get_user_id_from_cookies},
@@ -26,18 +26,18 @@ use crate::{
 
 mod dto;
 
-async fn upload_track(
-    State(mut tracks_client): State<TracksClient>,
+async fn upload_music(
+    State(mut music_client): State<MusicClient>,
     Extension(user_id): Extension<i64>,
-    Json(req): Json<UploadTrackReq>,
+    Json(req): Json<UploadMusicReq>,
 ) -> Result<Response, HandlerError> {
-    let req = tracks_grpc::UploadTrackReq {
+    let req = music_grpc::UploadMusicReq {
         title: req.title,
         description: req.description,
         uploader_id: user_id,
         categories_ids: req.categories_ids,
     };
-    let res = match tracks_client.upload_track(req).await {
+    let res = match music_client.upload_music(req).await {
         Ok(res) => res.into_inner().id,
         Err(_) => return Err(HandlerError::InternalError),
     };
@@ -46,17 +46,17 @@ async fn upload_track(
 
 #[axum::debug_handler]
 async fn request_upload_thumbnail(
-    State(mut tracks_client): State<TracksClient>,
+    State(mut music_client): State<MusicClient>,
     Extension(user_id): Extension<i64>,
-    Path(track_id): Path<i64>,
+    Path(music_id): Path<i64>,
     Json(req): Json<dto::UplodaReq>,
 ) -> Result<Response, HandlerError> {
-    let req = tracks_grpc::UploadAssetReq {
-        track_id,
+    let req = music_grpc::UploadAssetReq {
+        music_id,
         mime_type: req.mime_type,
         uploader_id: user_id,
     };
-    match tracks_client.upload_thumbnail(req).await {
+    match music_client.upload_thumbnail(req).await {
         Ok(res) => {
             let res = res.into_inner();
 
@@ -78,17 +78,17 @@ async fn request_upload_thumbnail(
 
 #[axum::debug_handler]
 async fn notify_upload_thumbnail(
-    State(mut tracks_client): State<TracksClient>,
+    State(mut music_client): State<MusicClient>,
     Extension(user_id): Extension<i64>,
-    Path(track_id): Path<i64>,
+    Path(music_id): Path<i64>,
     Json(req): Json<dto::NotifyUploadAssetReq>,
 ) -> Result<Response, HandlerError> {
-    let req = tracks_grpc::NotifyUploadAssetReq {
-        track_id,
+    let req = music_grpc::NotifyUploadAssetReq {
+        music_id,
         asset_id: req.asset_id,
         uploader_id: user_id,
     };
-    match tracks_client.notify_upload_thumbnail(req).await {
+    match music_client.notify_upload_thumbnail(req).await {
         Ok(_) => Ok(StatusCode::OK.into_response()),
         Err(e) => {
             if e.code().eq(&Code::AlreadyExists) {
@@ -102,15 +102,15 @@ async fn notify_upload_thumbnail(
 
 #[axum::debug_handler]
 async fn remove_thumbnail(
-    State(mut tracks_client): State<TracksClient>,
+    State(mut music_client): State<MusicClient>,
     Extension(user_id): Extension<i64>,
-    Path(track_id): Path<i64>,
+    Path(music_id): Path<i64>,
 ) -> Result<Response, HandlerError> {
-    let req = tracks_grpc::RemoveThumbnailReq {
-        track_id,
+    let req = music_grpc::RemoveThumbnailReq {
+        music_id,
         uploader_id: user_id,
     };
-    match tracks_client.remove_thumbnail(req).await {
+    match music_client.remove_thumbnail(req).await {
         Ok(_) => Ok(StatusCode::OK.into_response()),
         Err(e) => {
             if e.code().eq(&Code::AlreadyExists) {
@@ -122,33 +122,33 @@ async fn remove_thumbnail(
     }
 }
 
-async fn get_full_track(
-    State((mut tracks_client, auth_client, mut identity_client)): State<(
-        TracksClient,
+async fn get_full_music(
+    State((mut music_client, auth_client, mut identity_client)): State<(
+        MusicClient,
         AuthClient,
         IdentityClient,
     )>,
     cookies: CookieManager,
-    Path(track_id): Path<i64>,
+    Path(music_id): Path<i64>,
 ) -> Result<Response, HandlerError> {
-    let req = tracks_grpc::TrackId { id: track_id };
+    let req = music_grpc::MusicId { id: music_id };
 
-    let track_data = match tracks_client.get_full_track(req).await {
+    let music_data = match music_client.get_full_music(req).await {
         Ok(res) => res.into_inner(),
         Err(_) => return Err(HandlerError::InternalError),
     };
 
-    if track_data.upload_status != "uploaded" {
+    if music_data.upload_status != "uploaded" {
         let user_id = get_user_id_from_cookies(auth_client, cookies).await?;
-        if track_data.uploader_id != user_id {
+        if music_data.uploader_id != user_id {
             return Err(HandlerError::Unauthorized);
         }
     }
 
-    let thumbnail_url = asset_id_to_url(AssetPrefix::Track, track_data.thumbnail_id);
+    let thumbnail_url = asset_id_to_url(AssetPrefix::Music, music_data.thumbnail_id);
 
     let req = identity_grpc::UserId {
-        user_id: track_data.uploader_id,
+        user_id: music_data.uploader_id,
     };
     let uploader_profile = match identity_client.get_basic_profile(req).await {
         Ok(res) => {
@@ -163,16 +163,16 @@ async fn get_full_track(
         Err(_) => return Err(HandlerError::NotFound),
     };
 
-    let res = FullTrackRes {
-        id: track_data.id,
-        title: track_data.title,
-        description: track_data.description,
+    let res = FullMusicRes {
+        id: music_data.id,
+        title: music_data.title,
+        description: music_data.description,
         thumbnail_url,
-        duration_seconds: track_data.duration_seconds,
-        play_count: track_data.play_count,
-        like_count: track_data.like_count,
+        duration_seconds: music_data.duration_seconds,
+        play_count: music_data.play_count,
+        like_count: music_data.like_count,
         uploader: uploader_profile,
-        categories: track_data
+        categories: music_data
             .categories
             .into_iter()
             .map(|c| CategoryRes {
@@ -180,8 +180,8 @@ async fn get_full_track(
                 name: c.name,
             })
             .collect(),
-        upload_status: track_data.upload_status,
-        created_at: track_data.created_at,
+        upload_status: music_data.upload_status,
+        created_at: music_data.created_at,
     };
 
     Ok(Json(res).into_response())
@@ -189,17 +189,17 @@ async fn get_full_track(
 
 #[axum::debug_handler]
 async fn request_upload_audio(
-    State(mut tracks_client): State<TracksClient>,
+    State(mut music_client): State<MusicClient>,
     Extension(user_id): Extension<i64>,
-    Path(track_id): Path<i64>,
+    Path(music_id): Path<i64>,
     Json(req): Json<dto::UplodaReq>,
 ) -> Result<Response, HandlerError> {
-    let req = tracks_grpc::UploadAssetReq {
-        track_id,
+    let req = music_grpc::UploadAssetReq {
+        music_id,
         mime_type: req.mime_type,
         uploader_id: user_id,
     };
-    match tracks_client.upload_track_audio(req).await {
+    match music_client.upload_music_audio(req).await {
         Ok(res) => {
             let res = res.into_inner();
 
@@ -221,55 +221,55 @@ async fn request_upload_audio(
 
 #[axum::debug_handler]
 async fn notify_upload_audio(
-    State(mut tracks_client): State<TracksClient>,
+    State(mut music_client): State<MusicClient>,
     Extension(user_id): Extension<i64>,
-    Path(track_id): Path<i64>,
+    Path(music_id): Path<i64>,
     Json(req): Json<dto::NotifyUploadAssetReq>,
 ) -> Result<Response, HandlerError> {
-    let req = tracks_grpc::NotifyUploadAssetReq {
-        track_id,
+    let req = music_grpc::NotifyUploadAssetReq {
+        music_id,
         asset_id: req.asset_id,
         uploader_id: user_id,
     };
-    match tracks_client.notify_upload_track_audio(req).await {
+    match music_client.notify_upload_music_audio(req).await {
         Ok(_) => Ok(StatusCode::OK.into_response()),
         Err(_) => Err(HandlerError::InternalError),
     }
 }
 
-pub fn create_tracks_router(
-    tracks_client: TracksClient,
+pub fn create_music_router(
+    music_client: MusicClient,
     identity_client: IdentityClient,
     auth_client: AuthClient,
 ) -> Router {
     Router::new()
         .merge(
             Router::new()
-                .route("/{track_id}", get(get_full_track))
-                .with_state((tracks_client.clone(), auth_client.clone(), identity_client))
+                .route("/{music_id}", get(get_full_music))
+                .with_state((music_client.clone(), auth_client.clone(), identity_client))
                 .layer(CookieLayer::strict()),
         )
         .merge(
             Router::new()
-                .route("/upload", post(upload_track))
+                .route("/upload", post(upload_music))
                 .route(
-                    "/request-upload-image/{track_id}",
+                    "/request-upload-image/{music_id}",
                     patch(request_upload_thumbnail),
                 )
                 .route(
-                    "/notify-upload-image/{track_id}",
+                    "/notify-upload-image/{music_id}",
                     patch(notify_upload_thumbnail),
                 )
                 .route(
-                    "/request-upload-audio/{track_id}",
+                    "/request-upload-audio/{music_id}",
                     patch(request_upload_audio),
                 )
                 .route(
-                    "/notify-upload-audio/{track_id}",
+                    "/notify-upload-audio/{music_id}",
                     patch(notify_upload_audio),
                 )
-                .route("/remove-image/{track_id}", delete(remove_thumbnail))
-                .with_state(tracks_client.clone())
+                .route("/remove-image/{music_id}", delete(remove_thumbnail))
+                .with_state(music_client.clone())
                 .layer(from_fn_with_state(auth_client, auth_middleware))
                 .layer(CookieLayer::strict()),
         )

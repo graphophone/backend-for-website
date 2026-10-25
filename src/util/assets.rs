@@ -1,13 +1,13 @@
 pub enum AssetPrefix {
     Identity,
-    Track,
+    Music,
 }
 
 impl std::string::ToString for AssetPrefix {
     fn to_string(&self) -> String {
         match self {
             AssetPrefix::Identity => "identity",
-            AssetPrefix::Track => "track",
+            AssetPrefix::Music => "music",
         }
         .to_string()
     }

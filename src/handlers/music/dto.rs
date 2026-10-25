@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::handlers::user::dto::BasicProfileRes;
 
 #[derive(Deserialize)]
-pub struct UploadTrackReq {
+pub struct UploadMusicReq {
     pub title: String,
     pub description: Option<String>,
     #[serde(rename(deserialize = "categoriesIds"))]
@@ -37,7 +37,7 @@ pub struct CategoryRes {
 }
 
 #[derive(Serialize)]
-pub struct FullTrackRes {
+pub struct FullMusicRes {
     pub id: i64,
     pub title: String,
     pub description: Option<String>,
