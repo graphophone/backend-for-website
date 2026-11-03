@@ -32,11 +32,8 @@ pub async fn run(conf: config::Config) -> Result<()> {
         .init();
 
     let auth_client = AuthClient::build(conf.services.auth.clone()).await?;
-
     let identity_client = IdentityClient::build(conf.services.identity.clone()).await?;
-
     let categories_client = CategoriesClient::build(conf.services.music_catalog.clone()).await?;
-
     let music_client = MusicClient::build(conf.services.music_catalog.clone()).await?;
 
     let auth_conf = Arc::new(conf.auth);
