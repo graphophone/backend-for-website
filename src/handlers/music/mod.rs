@@ -224,6 +224,18 @@ async fn notify_upload_audio(
     }
 }
 
+#[axum::debug_handler]
+async fn remove_music(
+    State(mut music_client): State<MusicClient>,
+    Path(music_id): Path<i64>,
+) -> Result<Response, HandlerError> {
+    let req = music_grpc::RemoveMusicReq { music_id };
+    match music_client.remove_music(req).await {
+        Ok(_) => Ok(StatusCode::OK.into_response()),
+        Err(_) => Err(HandlerError::InternalError),
+    }
+}
+
 pub fn create_music_router(
     music_client: MusicClient,
     identity_client: IdentityClient,
@@ -257,6 +269,7 @@ pub fn create_music_router(
                             "/notify-upload-audio/{music_id}",
                             patch(notify_upload_audio),
                         )
+                        .route("/{music_id}", delete(remove_music))
                         .route("/remove-image/{music_id}", delete(remove_thumbnail))
                         .layer(from_fn_with_state(music_client.clone(), owner_middleware)),
                 )

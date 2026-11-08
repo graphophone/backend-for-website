@@ -3,11 +3,12 @@ use std::sync::Arc;
 use crate::{
     clients::{
         auth::AuthClient, categories::CategoriesClient,
-        identity::identity_grpc::identity_client::IdentityClient, music::MusicClient,
+        identity::identity_grpc::identity_client::IdentityClient, likes::LikesClient,
+        music::MusicClient,
     },
     handlers::{
-        auth::create_auth_router, categories::create_categories_router, music::create_music_router,
-        user::create_user_router,
+        auth::create_auth_router, categories::create_categories_router, likes::create_likes_router,
+        music::create_music_router, user::create_user_router,
     },
 };
 use anyhow::Result;
@@ -35,6 +36,7 @@ pub async fn run(conf: config::Config) -> Result<()> {
     let identity_client = IdentityClient::build(conf.services.identity.clone()).await?;
     let categories_client = CategoriesClient::build(conf.services.music_catalog.clone()).await?;
     let music_client = MusicClient::build(conf.services.music_catalog.clone()).await?;
+    let likes_client = LikesClient::build(conf.services.music_catalog.clone()).await?;
 
     let auth_conf = Arc::new(conf.auth);
 
@@ -55,6 +57,10 @@ pub async fn run(conf: config::Config) -> Result<()> {
         .nest(
             "/music",
             create_music_router(music_client, identity_client.clone(), auth_client.clone()),
+        )
+        .nest(
+            "/likes",
+            create_likes_router(likes_client, auth_client.clone()),
         )
         .route(
             "/health",
