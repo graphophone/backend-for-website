@@ -3,6 +3,12 @@ use serde::{Deserialize, Serialize};
 use crate::handlers::user::dto::BasicProfileRes;
 
 #[derive(Deserialize)]
+pub struct GetUserMusicQuery {
+    #[serde(rename(deserialize = "pageNumber"))]
+    pub page_number: i32,
+}
+
+#[derive(Deserialize)]
 pub struct UploadMusicReq {
     pub title: String,
     pub description: Option<String>,
@@ -56,6 +62,32 @@ pub struct FullMusicRes {
     pub upload_status: String,
     #[serde(rename(serialize = "createdAt"))]
     pub created_at: i64,
+    #[serde(rename(serialize = "isLiked"))]
+    pub is_liked: bool,
+}
+
+#[derive(Serialize)]
+pub struct UserMusicPage {
+    #[serde(rename(serialize = "musicEntries"))]
+    pub music_entries: Vec<UserMusicRes>,
+    #[serde(rename(serialize = "totalPages"))]
+    pub total_pages: i64,
+}
+
+#[derive(Serialize)]
+pub struct UserMusicRes {
+    pub id: i64,
+    pub title: String,
+    #[serde(rename(serialize = "thumbnailUrl"))]
+    pub thumbnail_url: Option<String>,
+    #[serde(rename(serialize = "durationSeconds"))]
+    pub duration_seconds: Option<i64>,
+    #[serde(rename(serialize = "playCount"))]
+    pub play_count: i64,
+    #[serde(rename(serialize = "likeCount"))]
+    pub like_count: i64,
+    #[serde(rename(serialize = "uploadStatus"))]
+    pub upload_status: String,
     #[serde(rename(serialize = "isLiked"))]
     pub is_liked: bool,
 }

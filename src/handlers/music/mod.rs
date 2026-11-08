@@ -1,6 +1,6 @@
 use axum::{
     Extension, Json, Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     middleware::from_fn_with_state,
     response::{IntoResponse, Response},
@@ -17,7 +17,7 @@ use crate::{
     },
     handlers::{
         error::HandlerError,
-        music::dto::{CategoryRes, FullMusicRes, UploadMusicReq},
+        music::dto::{CategoryRes, FullMusicRes, GetUserMusicQuery, UploadMusicReq},
         user::dto::BasicProfileRes,
     },
     middleware::{
@@ -245,6 +245,61 @@ async fn remove_music(
     }
 }
 
+#[axum::debug_handler]
+async fn get_user_music(
+    State((mut music_client, auth_client, _)): State<(MusicClient, AuthClient, IdentityClient)>,
+    cookies: CookieManager,
+    Path(user_id): Path<i64>,
+    Query(GetUserMusicQuery { page_number }): Query<GetUserMusicQuery>,
+) -> Result<Response, HandlerError> {
+    let requester_id = get_user_id_from_cookies(auth_client, cookies).await;
+    let requester_id = match requester_id {
+        Ok(v) => Some(v),
+        Err(_) => None,
+    };
+
+    let req = music_grpc::UserMusicReq {
+        user_id,
+        page_number,
+        requester_id,
+    };
+
+    let music_page = match music_client.get_user_music(req).await {
+        Ok(v) => v.into_inner(),
+        Err(_) => return Err(HandlerError::InternalError),
+    };
+
+    let is_owner = match requester_id {
+        Some(v) => v == user_id,
+        None => false,
+    };
+    let entries = music_page
+        .music_entries
+        .into_iter()
+        .filter_map(|m| {
+            if !is_owner && &m.upload_status != "uploaded" {
+                return None;
+            }
+            Some(dto::UserMusicRes {
+                id: m.id,
+                title: m.title,
+                thumbnail_url: m.thumbnail_id,
+                duration_seconds: m.duration_seconds,
+                play_count: m.play_count,
+                like_count: m.like_count,
+                upload_status: m.upload_status,
+                is_liked: m.is_liked,
+            })
+        })
+        .collect();
+
+    Ok(Json(dto::UserMusicPage {
+        music_entries: entries,
+        total_pages: music_page.total_pages,
+    })
+    .into_response())
+}
+
 pub fn create_music_router(
     music_client: MusicClient,
     identity_client: IdentityClient,
@@ -254,8 +309,8 @@ pub fn create_music_router(
         .merge(
             Router::new()
                 .route("/{music_id}", get(get_full_music))
-                .with_state((music_client.clone(), auth_client.clone(), identity_client))
-                .layer(CookieLayer::strict()),
+                .route("/user-music/{user_id}", get(get_user_music))
+                .with_state((music_client.clone(), auth_client.clone(), identity_client)),
         )
         .merge(
             Router::new()
@@ -283,7 +338,7 @@ pub fn create_music_router(
                         .layer(from_fn_with_state(music_client.clone(), owner_middleware)),
                 )
                 .with_state(music_client.clone())
-                .layer(from_fn_with_state(auth_client, auth_middleware))
-                .layer(CookieLayer::strict()),
+                .layer(from_fn_with_state(auth_client, auth_middleware)),
         )
+        .layer(CookieLayer::strict())
 }
