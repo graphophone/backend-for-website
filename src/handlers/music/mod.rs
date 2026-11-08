@@ -300,17 +300,35 @@ async fn get_user_music(
     .into_response())
 }
 
+#[axum::debug_handler]
+async fn request_play(
+    State(mut music_client): State<MusicClient>,
+    Path(music_id): Path<i64>,
+) -> Result<Response, HandlerError> {
+    let req = music_grpc::MusicId { id: music_id };
+
+    match music_client.request_music_play(req).await {
+        Ok(res) => {
+            let hls_master_url = res.into_inner().hls_master_url;
+            Ok(Json(hls_master_url).into_response())
+        }
+        Err(_) => Err(HandlerError::InternalError),
+    }
+}
+
 pub fn create_music_router(
     music_client: MusicClient,
     identity_client: IdentityClient,
     auth_client: AuthClient,
 ) -> Router {
     Router::new()
+        .route("/{music_id}", get(get_full_music))
+        .route("/user-music/{user_id}", get(get_user_music))
+        .with_state((music_client.clone(), auth_client.clone(), identity_client))
         .merge(
             Router::new()
-                .route("/{music_id}", get(get_full_music))
-                .route("/user-music/{user_id}", get(get_user_music))
-                .with_state((music_client.clone(), auth_client.clone(), identity_client)),
+                .route("/{music_id}/request-play", patch(request_play))
+                .with_state(music_client.clone()),
         )
         .merge(
             Router::new()

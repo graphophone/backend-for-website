@@ -116,7 +116,7 @@ message MusicId {
 }
 
 message MusicPlayResponse {
-    string hls_master_id = 1;
+    string hls_master_url = 1;
 }
 
 message Category {
