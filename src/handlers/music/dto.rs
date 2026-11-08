@@ -56,4 +56,6 @@ pub struct FullMusicRes {
     pub upload_status: String,
     #[serde(rename(serialize = "createdAt"))]
     pub created_at: i64,
+    #[serde(rename(serialize = "isLiked"))]
+    pub is_liked: bool,
 }

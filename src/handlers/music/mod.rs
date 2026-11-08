@@ -125,16 +125,24 @@ async fn get_full_music(
     cookies: CookieManager,
     Path(music_id): Path<i64>,
 ) -> Result<Response, HandlerError> {
-    let req = music_grpc::MusicId { id: music_id };
+    let user_id = get_user_id_from_cookies(auth_client, cookies).await;
+    let user_id = match user_id {
+        Ok(v) => Some(v),
+        Err(_) => None,
+    };
 
+    let req = music_grpc::FullMusicReq { music_id, user_id };
     let music_data = match music_client.get_full_music(req).await {
         Ok(res) => res.into_inner(),
         Err(_) => return Err(HandlerError::InternalError),
     };
 
     if music_data.upload_status != "uploaded" {
-        let user_id = get_user_id_from_cookies(auth_client, cookies).await?;
-        if music_data.uploader_id != user_id {
+        if let Some(user_id) = user_id {
+            if music_data.uploader_id != user_id {
+                return Err(HandlerError::Unauthorized);
+            }
+        } else {
             return Err(HandlerError::Unauthorized);
         }
     }
@@ -173,6 +181,7 @@ async fn get_full_music(
             .collect(),
         upload_status: music_data.upload_status,
         created_at: music_data.created_at,
+        is_liked: music_data.is_liked,
     };
 
     Ok(Json(res).into_response())

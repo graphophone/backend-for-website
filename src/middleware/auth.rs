@@ -1,7 +1,15 @@
-use axum::{extract::{Request, State}, middleware::Next, response::Response};
+use axum::{
+    extract::{Request, State},
+    middleware::Next,
+    response::Response,
+};
 use axum_cookie::CookieManager;
 
-use crate::{clients::auth::{self, AuthClient}, handlers::error::HandlerError, util::cookie::extract_access_token};
+use crate::{
+    clients::auth::{self, AuthClient},
+    handlers::error::HandlerError,
+    util::cookie::extract_access_token,
+};
 
 pub async fn get_user_id_from_cookies(
     mut auth_client: AuthClient,
@@ -12,9 +20,7 @@ pub async fn get_user_id_from_cookies(
         Err(_) => return Err(HandlerError::Unauthorized),
     };
 
-    let extract_req = auth::auth_grpc::AccessToken {
-        access_token,
-    };
+    let extract_req = auth::auth_grpc::AccessToken { access_token };
     let claims = match auth_client.extract_user_id(extract_req).await {
         Ok(v) => v.into_inner(),
         Err(_) => return Err(HandlerError::Unauthorized),
@@ -29,11 +35,8 @@ pub async fn auth_middleware(
     mut req: Request,
     next: Next,
 ) -> Result<Response, HandlerError> {
-    let user_id = get_user_id_from_cookies(
-        auth_client,
-        cookies,
-    ).await?;
-    
+    let user_id = get_user_id_from_cookies(auth_client, cookies).await?;
+
     req.extensions_mut().insert(user_id);
     Ok(next.run(req).await)
 }
