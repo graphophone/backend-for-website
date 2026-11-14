@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     middleware::from_fn_with_state,
     response::{IntoResponse, Response},
-    routing::{delete, get, patch, post},
+    routing::{delete, get, patch, post, put},
 };
 use axum_cookie::{CookieLayer, CookieManager};
 use tonic::Code;
@@ -17,7 +17,9 @@ use crate::{
     },
     handlers::{
         error::HandlerError,
-        music::dto::{CategoryRes, FullMusicRes, GetUserMusicQuery, UploadMusicReq},
+        music::dto::{
+            CategoryRes, FullMusicRes, GetUserMusicQuery, UpdateMusicReq, UploadMusicReq,
+        },
         user::dto::BasicProfileRes,
     },
     middleware::{
@@ -316,6 +318,26 @@ async fn request_play(
     }
 }
 
+#[axum::debug_handler]
+async fn update_music(
+    State(mut music_client): State<MusicClient>,
+    Path(music_id): Path<i64>,
+    Json(req): Json<UpdateMusicReq>,
+) -> Result<Response, HandlerError> {
+    let req = music_grpc::UpdateMusicReq {
+        music_id,
+        title: req.title,
+        description: req.description,
+        categories_ids: req.categories_ids,
+    };
+
+    if let Err(_) = music_client.update_music(req).await {
+        return Err(HandlerError::InternalError);
+    }
+
+    Ok(StatusCode::OK.into_response())
+}
+
 pub fn create_music_router(
     music_client: MusicClient,
     identity_client: IdentityClient,
@@ -352,6 +374,7 @@ pub fn create_music_router(
                             patch(notify_upload_audio),
                         )
                         .route("/{music_id}", delete(remove_music))
+                        .route("/{music_id}", put(update_music))
                         .route("/remove-image/{music_id}", delete(remove_thumbnail))
                         .layer(from_fn_with_state(music_client.clone(), owner_middleware)),
                 )

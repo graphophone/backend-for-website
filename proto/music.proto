@@ -13,7 +13,6 @@ service Music {
     rpc UploadMusicAudio(UploadAssetReq) returns (UploadAssetRes);
     rpc NotifyUploadMusicAudio(NotifyUploadAssetReq) returns (Empty);
     rpc RemoveMusic(RemoveMusicReq) returns (Empty);
-    rpc LinkMusicAudio(LinkMusicAudioReq) returns (Empty);
     rpc RequestMusicPlay(MusicId) returns (MusicPlayResponse);
 
     rpc GetUserMusic(UserMusicReq) returns (UserMusicPage);

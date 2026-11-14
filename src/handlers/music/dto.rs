@@ -16,6 +16,8 @@ pub struct UploadMusicReq {
     pub categories_ids: Vec<i64>,
 }
 
+pub type UpdateMusicReq = UploadMusicReq;
+
 #[derive(Deserialize)]
 pub struct UplodaReq {
     #[serde(rename(deserialize = "mimeType"))]
