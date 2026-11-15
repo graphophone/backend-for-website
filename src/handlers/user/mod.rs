@@ -1,11 +1,12 @@
 use crate::{
     clients::{
         auth::AuthClient,
+        follows::{FollowsClient, follows_grpc},
         identity::{IdentityClient, identity_grpc},
     },
     handlers::{
         error::HandlerError,
-        user::dto::{BasicProfileRes, EditProfileReq, ImageTypeQuery, ProfileRes},
+        user::dto::{BasicProfileRes, EditProfileReq, ImageTypeQuery, MyProfileRes, ProfileRes},
     },
     middleware::auth::auth_middleware,
 };
@@ -25,6 +26,7 @@ pub mod dto;
 #[derive(Clone)]
 struct UserState {
     pub identity_client: IdentityClient,
+    pub follows_client: FollowsClient,
 }
 
 #[axum::debug_handler]
@@ -33,31 +35,39 @@ async fn get_user_profile(
     State(state): State<UserState>,
 ) -> Result<Response, HandlerError> {
     let mut identity_client = state.identity_client;
+    let mut follows_client = state.follows_client;
 
     let req = identity_grpc::FullProfileReq {
         user_id,
         with_email: false,
     };
-    match identity_client.get_full_profile(req).await {
-        Ok(res) => {
-            let profile = res.into_inner();
+    let profile = match identity_client.get_full_profile(req).await {
+        Ok(res) => res.into_inner(),
+        Err(_) => return Err(HandlerError::NotFound),
+    };
 
-            let res = ProfileRes {
-                user_id: profile.user_id,
-                username: profile.username,
-                email: None,
-                avatar_url: profile.avatar_id,
-                banner_url: profile.banner_id,
-                first_name: profile.first_name,
-                last_name: profile.last_name,
-                bio: profile.bio,
-                country: profile.country,
-                city: profile.city,
-            };
-            Ok(Json(res).into_response())
-        }
-        Err(_) => Err(HandlerError::NotFound),
-    }
+    let req = follows_grpc::UserId { user_id: user_id };
+    let follows_count = match follows_client.get_user_follows_count(req).await {
+        Ok(res) => Some(res.into_inner()),
+        Err(_) => None,
+    };
+
+    let profile = ProfileRes {
+        user_id,
+        username: profile.username,
+        avatar_url: profile.avatar_id,
+        banner_url: profile.banner_id,
+        first_name: profile.first_name,
+        last_name: profile.last_name,
+        bio: profile.bio,
+        country: profile.country,
+        city: profile.city,
+        email: profile.email,
+        followers_count: follows_count.map(|v| v.followers_count),
+        followings_count: follows_count.map(|v| v.followings_count),
+    };
+
+    Ok(Json(profile).into_response())
 }
 
 #[axum::debug_handler]
@@ -98,7 +108,7 @@ async fn get_my_full_profile(
         Ok(res) => {
             let res = res.into_inner();
 
-            Ok(Json(ProfileRes {
+            Ok(Json(MyProfileRes {
                 user_id: res.user_id,
                 username: res.username,
                 email: res.email,
@@ -235,7 +245,11 @@ async fn remove_image(
     }
 }
 
-pub fn create_user_router(auth_client: AuthClient, identity_client: IdentityClient) -> Router {
+pub fn create_user_router(
+    auth_client: AuthClient,
+    identity_client: IdentityClient,
+    follows_client: FollowsClient,
+) -> Router {
     Router::new()
         .route("/{user_id}", get(get_user_profile))
         .merge(
@@ -249,5 +263,8 @@ pub fn create_user_router(auth_client: AuthClient, identity_client: IdentityClie
                 .layer(from_fn_with_state(auth_client, auth_middleware))
                 .layer(CookieLayer::strict()),
         )
-        .with_state(UserState { identity_client })
+        .with_state(UserState {
+            identity_client,
+            follows_client,
+        })
 }

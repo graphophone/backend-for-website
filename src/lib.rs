@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     clients::{
-        auth::AuthClient, categories::CategoriesClient,
+        auth::AuthClient, categories::CategoriesClient, follows::FollowsClient,
         identity::identity_grpc::identity_client::IdentityClient, likes::LikesClient,
         music::MusicClient,
     },
@@ -37,6 +37,7 @@ pub async fn run(conf: config::Config) -> Result<()> {
     let categories_client = CategoriesClient::build(conf.services.music_catalog.clone()).await?;
     let music_client = MusicClient::build(conf.services.music_catalog.clone()).await?;
     let likes_client = LikesClient::build(conf.services.music_catalog.clone()).await?;
+    let follows_client = FollowsClient::build(conf.services.social.clone()).await?;
 
     let auth_conf = Arc::new(conf.auth);
 
@@ -51,7 +52,7 @@ pub async fn run(conf: config::Config) -> Result<()> {
         )
         .nest(
             "/user",
-            create_user_router(auth_client.clone(), identity_client.clone()),
+            create_user_router(auth_client.clone(), identity_client.clone(), follows_client),
         )
         .nest("/categories", create_categories_router(categories_client))
         .nest(
