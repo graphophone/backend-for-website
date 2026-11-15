@@ -245,6 +245,24 @@ async fn remove_image(
     }
 }
 
+#[axum::debug_handler]
+async fn follow_user(
+    State(state): State<UserState>,
+    Extension(follower_id): Extension<i64>,
+    Path(followee_id): Path<i64>,
+) -> Result<Response, HandlerError> {
+    let req = follows_grpc::ToggleFollowReq {
+        followee_id,
+        follower_id,
+    };
+    let mut follows_client = state.follows_client;
+
+    match follows_client.toggle_follow(req).await {
+        Ok(_) => Ok(StatusCode::OK.into_response()),
+        Err(_) => Err(HandlerError::InternalError),
+    }
+}
+
 pub fn create_user_router(
     auth_client: AuthClient,
     identity_client: IdentityClient,
@@ -260,6 +278,7 @@ pub fn create_user_router(
                 .route("/request-upload-image", patch(request_upload_image))
                 .route("/notify-upload-image", patch(notify_upload_image))
                 .route("/remove-image", delete(remove_image))
+                .route("/{user_id}/follow", patch(follow_user))
                 .layer(from_fn_with_state(auth_client, auth_middleware))
                 .layer(CookieLayer::strict()),
         )
