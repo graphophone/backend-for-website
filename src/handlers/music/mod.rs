@@ -24,7 +24,7 @@ use crate::{
     },
     middleware::{
         auth::{auth_middleware, get_user_id_from_cookies},
-        owner::owner_middleware,
+        owner::music_owner_middleware,
     },
 };
 
@@ -377,7 +377,10 @@ pub fn create_music_router(
                         .route("/{music_id}", delete(remove_music))
                         .route("/{music_id}", put(update_music))
                         .route("/remove-image/{music_id}", delete(remove_thumbnail))
-                        .layer(from_fn_with_state(music_client.clone(), owner_middleware)),
+                        .layer(from_fn_with_state(
+                            music_client.clone(),
+                            music_owner_middleware,
+                        )),
                 )
                 .with_state(music_client.clone())
                 .layer(from_fn_with_state(auth_client, auth_middleware)),
