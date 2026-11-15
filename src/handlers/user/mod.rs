@@ -6,9 +6,12 @@ use crate::{
     },
     handlers::{
         error::HandlerError,
-        user::dto::{BasicProfileRes, EditProfileReq, ImageTypeQuery, MyProfileRes, ProfileRes},
+        user::dto::{
+            BasicProfileRes, EditProfileReq, FollowsCount, FollowsPageQuery, ImageTypeQuery,
+            ProfileRes,
+        },
     },
-    middleware::auth::auth_middleware,
+    middleware::auth::{auth_middleware, get_user_id_from_cookies},
 };
 use axum::{
     Extension, Json, Router,
@@ -18,15 +21,48 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get, patch, put},
 };
-use axum_cookie::CookieLayer;
+use axum_cookie::{CookieLayer, CookieManager};
 use tonic::Code;
 
 pub mod dto;
 
 #[derive(Clone)]
 struct UserState {
+    pub auth_client: AuthClient,
     pub identity_client: IdentityClient,
     pub follows_client: FollowsClient,
+}
+
+#[axum::debug_handler]
+async fn get_user_follows_count(
+    Path(user_id): Path<i64>,
+    State(state): State<UserState>,
+    cookies: CookieManager,
+) -> Result<Response, HandlerError> {
+    let follower_id = get_user_id_from_cookies(state.auth_client, cookies).await;
+    let follower_id = match follower_id {
+        Ok(v) => Some(v),
+        Err(_) => None,
+    };
+    let mut follows_client = state.follows_client;
+
+    let req = follows_grpc::GetFollowsCountReq {
+        user_id,
+        follower_id,
+    };
+
+    let res = follows_client
+        .get_follows_count(req)
+        .await
+        .map_err(|_| HandlerError::InternalError)?
+        .into_inner();
+
+    Ok(Json(FollowsCount {
+        followers_count: res.followers_count,
+        followings_count: res.followings_count,
+        is_followed: res.is_followed,
+    })
+    .into_response())
 }
 
 #[axum::debug_handler]
@@ -35,7 +71,6 @@ async fn get_user_profile(
     State(state): State<UserState>,
 ) -> Result<Response, HandlerError> {
     let mut identity_client = state.identity_client;
-    let mut follows_client = state.follows_client;
 
     let req = identity_grpc::FullProfileReq {
         user_id,
@@ -44,12 +79,6 @@ async fn get_user_profile(
     let profile = match identity_client.get_full_profile(req).await {
         Ok(res) => res.into_inner(),
         Err(_) => return Err(HandlerError::NotFound),
-    };
-
-    let req = follows_grpc::UserId { user_id: user_id };
-    let follows_count = match follows_client.get_user_follows_count(req).await {
-        Ok(res) => Some(res.into_inner()),
-        Err(_) => None,
     };
 
     let profile = ProfileRes {
@@ -63,8 +92,6 @@ async fn get_user_profile(
         country: profile.country,
         city: profile.city,
         email: profile.email,
-        followers_count: follows_count.map(|v| v.followers_count),
-        followings_count: follows_count.map(|v| v.followings_count),
     };
 
     Ok(Json(profile).into_response())
@@ -108,7 +135,7 @@ async fn get_my_full_profile(
         Ok(res) => {
             let res = res.into_inner();
 
-            Ok(Json(MyProfileRes {
+            Ok(Json(ProfileRes {
                 user_id: res.user_id,
                 username: res.username,
                 email: res.email,
@@ -263,6 +290,28 @@ async fn follow_user(
     }
 }
 
+#[axum::debug_handler]
+async fn get_user_followings(
+    State(state): State<UserState>,
+    Path(user_id): Path<i64>,
+    Query(query): Query<FollowsPageQuery>,
+) -> Result<Response, HandlerError> {
+    let mut follows_client = state.follows_client;
+
+    let req = follows_grpc::GetFollowsReq {
+        user_id,
+        page_number: query.page_number,
+    };
+
+    let follows = follows_client
+        .get_followings(req)
+        .await
+        .map_err(|_| HandlerError::InternalError)?
+        .into_inner();
+
+    Ok(())
+}
+
 pub fn create_user_router(
     auth_client: AuthClient,
     identity_client: IdentityClient,
@@ -270,6 +319,9 @@ pub fn create_user_router(
 ) -> Router {
     Router::new()
         .route("/{user_id}", get(get_user_profile))
+        .route("/{user_id}/followings", get(get_user_followings))
+        .route("/{user_id}/followers", get(get_user_followers))
+        .route("/{user_id}/follows-count", get(get_user_follows_count))
         .merge(
             Router::new()
                 .route("/me", get(get_my_basic_profile))
@@ -279,11 +331,12 @@ pub fn create_user_router(
                 .route("/notify-upload-image", patch(notify_upload_image))
                 .route("/remove-image", delete(remove_image))
                 .route("/{user_id}/follow", patch(follow_user))
-                .layer(from_fn_with_state(auth_client, auth_middleware))
-                .layer(CookieLayer::strict()),
+                .layer(from_fn_with_state(auth_client.clone(), auth_middleware)),
         )
         .with_state(UserState {
+            auth_client,
             identity_client,
             follows_client,
         })
+        .layer(CookieLayer::strict())
 }

@@ -2,21 +2,23 @@ syntax = "proto3";
 package follows;
 
 service Follows {
-    rpc GetUserFollowsCount(UserId) returns (FollowsCount);
+    rpc GetFollowsCount(GetFollowsCountReq) returns (FollowsCount);
     rpc ToggleFollow(ToggleFollowReq) returns (Empty);
-    rpc GetUserFollowers(GetFollowsReq) returns (FollowsPage);
-    rpc GetUserFollowings(GetFollowsReq) returns (FollowsPage);
+    rpc GetFollowers(GetFollowsReq) returns (FollowsPage);
+    rpc GetFollowings(GetFollowsReq) returns (FollowsPage);
 }
 
 message Empty {}
 
-message UserId {
+message GetFollowsCountReq {
     int64 user_id = 1;
+    optional int64 follower_id = 2;
 }
 
 message FollowsCount {
     int64 followings_count = 1;
     int64 followers_count = 2;
+    bool is_followed = 3;
 }
 
 message ToggleFollowReq {

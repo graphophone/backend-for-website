@@ -2,25 +2,6 @@ use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 #[derive(Serialize)]
-pub struct MyProfileRes {
-    #[serde(rename(serialize = "userId"))]
-    pub user_id: i64,
-    pub username: String,
-    #[serde(rename(serialize = "avatarUrl"))]
-    pub avatar_url: Option<String>,
-    #[serde(rename(serialize = "bannerUrl"))]
-    pub banner_url: Option<String>,
-    #[serde(rename(serialize = "firstName"))]
-    pub first_name: Option<String>,
-    #[serde(rename(serialize = "lastName"))]
-    pub last_name: Option<String>,
-    pub bio: Option<String>,
-    pub country: Option<String>,
-    pub city: Option<String>,
-    pub email: Option<String>,
-}
-
-#[derive(Serialize)]
 pub struct ProfileRes {
     #[serde(rename(serialize = "userId"))]
     pub user_id: i64,
@@ -37,10 +18,16 @@ pub struct ProfileRes {
     pub country: Option<String>,
     pub city: Option<String>,
     pub email: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct FollowsCount {
     #[serde(rename(serialize = "followersCount"))]
-    pub followers_count: Option<i64>,
+    pub followers_count: i64,
     #[serde(rename(serialize = "followingsCount"))]
-    pub followings_count: Option<i64>,
+    pub followings_count: i64,
+    #[serde(rename(serialize = "isFollowed"))]
+    pub is_followed: bool,
 }
 
 #[derive(Serialize)]
@@ -50,6 +37,8 @@ pub struct BasicProfileRes {
     pub username: String,
     #[serde(rename(serialize = "avatarUrl"))]
     pub avatar_url: Option<String>,
+    #[serde(rename(serialize = "follows_count"))]
+    pub follows_count: Option<FollowsCount>,
 }
 
 #[derive(Deserialize, Validate)]
@@ -91,4 +80,17 @@ pub struct NotifyUploadImageReq {
 pub struct ImageTypeQuery {
     #[serde(rename(deserialize = "imageType"))]
     pub image_type: String,
+}
+
+#[derive(Deserialize)]
+pub struct FollowsPageQuery {
+    #[serde(rename(deserialize = "pageNumber"))]
+    pub page_number: i64,
+}
+
+#[derive(Serialize)]
+pub struct FollowsPageRes {
+    #[serde(rename(deserialize = "total_pages"))]
+    pub total_pages: i64,
+    pub profiles: Vec<BasicProfileRes>,
 }

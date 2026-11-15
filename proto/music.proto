@@ -84,12 +84,6 @@ message RemoveMusicReq {
     int64 music_id = 1;
 }
 
-message LinkMusicAudioReq {
-    int64 music_id = 1;
-    string audio_id = 2;
-    int64 duration_seconds = 3;
-}
-
 message FullMusic {
     int64 id = 1;
     string title = 2;
