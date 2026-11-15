@@ -159,6 +159,7 @@ async fn get_full_music(
                 user_id: res.user_id,
                 username: res.username,
                 avatar_url: res.avatar_id,
+                follows_count: None,
             }
         }
         Err(_) => return Err(HandlerError::NotFound),

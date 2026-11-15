@@ -1,14 +1,19 @@
+use std::collections::HashMap;
+
 use crate::{
     clients::{
         auth::AuthClient,
-        follows::{FollowsClient, follows_grpc},
+        follows::{
+            FollowsClient,
+            follows_grpc::{self, FollowEntry},
+        },
         identity::{IdentityClient, identity_grpc},
     },
     handlers::{
         error::HandlerError,
         user::dto::{
-            BasicProfileRes, EditProfileReq, FollowsCount, FollowsPageQuery, ImageTypeQuery,
-            ProfileRes,
+            BasicProfileRes, EditProfileReq, FollowsCount, FollowsPageQuery, FollowsPageRes,
+            ImageTypeQuery, MyProfileRes, ProfileRes,
         },
     },
     middleware::auth::{auth_middleware, get_user_id_from_cookies},
@@ -98,7 +103,7 @@ async fn get_user_profile(
 }
 
 #[axum::debug_handler]
-async fn get_my_basic_profile(
+async fn get_my_profile(
     State(state): State<UserState>,
     Extension(user_id): Extension<i64>,
 ) -> Result<Response, HandlerError> {
@@ -109,7 +114,7 @@ async fn get_my_basic_profile(
         Ok(res) => {
             let res = res.into_inner();
 
-            Ok(Json(BasicProfileRes {
+            Ok(Json(MyProfileRes {
                 user_id: res.user_id,
                 username: res.username,
                 avatar_url: res.avatar_id,
@@ -290,17 +295,63 @@ async fn follow_user(
     }
 }
 
+async fn follows_to_profiles(
+    follows: Vec<FollowEntry>,
+    mut identity_client: IdentityClient,
+) -> anyhow::Result<Vec<BasicProfileRes>> {
+    let user_ids = follows.iter().map(|v| v.user_id).collect();
+    let req = identity_grpc::UserIds { user_ids };
+
+    let mut profiles: HashMap<_, _> = identity_client
+        .get_profiles(req)
+        .await?
+        .into_inner()
+        .profiles
+        .into_iter()
+        .map(|v| (v.user_id, v))
+        .collect();
+
+    let profiles = follows
+        .into_iter()
+        .filter_map(|f| {
+            let profile = match profiles.remove(&f.user_id) {
+                Some(v) => v,
+                None => return None,
+            };
+            Some(BasicProfileRes {
+                user_id: profile.user_id,
+                username: profile.username,
+                avatar_url: profile.avatar_id,
+                follows_count: f.follows_count.map(|v| dto::FollowsCount {
+                    followers_count: v.followers_count,
+                    followings_count: v.followings_count,
+                    is_followed: v.is_followed,
+                }),
+            })
+        })
+        .collect();
+
+    Ok(profiles)
+}
+
 #[axum::debug_handler]
 async fn get_user_followings(
     State(state): State<UserState>,
     Path(user_id): Path<i64>,
     Query(query): Query<FollowsPageQuery>,
+    cookies: CookieManager,
 ) -> Result<Response, HandlerError> {
+    let requestor_id = get_user_id_from_cookies(state.auth_client, cookies).await;
+    let requestor_id = match requestor_id {
+        Ok(v) => Some(v),
+        Err(_) => None,
+    };
     let mut follows_client = state.follows_client;
 
     let req = follows_grpc::GetFollowsReq {
         user_id,
         page_number: query.page_number,
+        requestor_id,
     };
 
     let follows = follows_client
@@ -309,7 +360,52 @@ async fn get_user_followings(
         .map_err(|_| HandlerError::InternalError)?
         .into_inner();
 
-    Ok(())
+    let profiles = follows_to_profiles(follows.follows, state.identity_client)
+        .await
+        .map_err(|_| HandlerError::InternalError)?;
+
+    Ok(Json(FollowsPageRes {
+        total_pages: follows.total_pages,
+        profiles,
+    })
+    .into_response())
+}
+
+#[axum::debug_handler]
+async fn get_user_followers(
+    State(state): State<UserState>,
+    Path(user_id): Path<i64>,
+    Query(query): Query<FollowsPageQuery>,
+    cookies: CookieManager,
+) -> Result<Response, HandlerError> {
+    let requestor_id = get_user_id_from_cookies(state.auth_client, cookies).await;
+    let requestor_id = match requestor_id {
+        Ok(v) => Some(v),
+        Err(_) => None,
+    };
+    let mut follows_client = state.follows_client;
+
+    let req = follows_grpc::GetFollowsReq {
+        user_id,
+        page_number: query.page_number,
+        requestor_id,
+    };
+
+    let follows = follows_client
+        .get_followers(req)
+        .await
+        .map_err(|_| HandlerError::InternalError)?
+        .into_inner();
+
+    let profiles = follows_to_profiles(follows.follows, state.identity_client)
+        .await
+        .map_err(|_| HandlerError::InternalError)?;
+
+    Ok(Json(FollowsPageRes {
+        total_pages: follows.total_pages,
+        profiles,
+    })
+    .into_response())
 }
 
 pub fn create_user_router(
@@ -324,7 +420,7 @@ pub fn create_user_router(
         .route("/{user_id}/follows-count", get(get_user_follows_count))
         .merge(
             Router::new()
-                .route("/me", get(get_my_basic_profile))
+                .route("/me", get(get_my_profile))
                 .route("/full-profile", get(get_my_full_profile))
                 .route("/update-profile", put(update_my_profile))
                 .route("/request-upload-image", patch(request_upload_image))

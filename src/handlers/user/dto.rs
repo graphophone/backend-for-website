@@ -31,13 +31,22 @@ pub struct FollowsCount {
 }
 
 #[derive(Serialize)]
+pub struct MyProfileRes {
+    #[serde(rename(serialize = "userId"))]
+    pub user_id: i64,
+    pub username: String,
+    #[serde(rename(serialize = "avatarUrl"))]
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Serialize)]
 pub struct BasicProfileRes {
     #[serde(rename(serialize = "userId"))]
     pub user_id: i64,
     pub username: String,
     #[serde(rename(serialize = "avatarUrl"))]
     pub avatar_url: Option<String>,
-    #[serde(rename(serialize = "follows_count"))]
+    #[serde(rename(serialize = "followsCount"))]
     pub follows_count: Option<FollowsCount>,
 }
 
@@ -90,7 +99,7 @@ pub struct FollowsPageQuery {
 
 #[derive(Serialize)]
 pub struct FollowsPageRes {
-    #[serde(rename(deserialize = "total_pages"))]
+    #[serde(rename(serialize = "totalPages"))]
     pub total_pages: i64,
     pub profiles: Vec<BasicProfileRes>,
 }
