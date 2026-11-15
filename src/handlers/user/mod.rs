@@ -341,8 +341,8 @@ async fn get_user_followings(
     Query(query): Query<FollowsPageQuery>,
     cookies: CookieManager,
 ) -> Result<Response, HandlerError> {
-    let requestor_id = get_user_id_from_cookies(state.auth_client, cookies).await;
-    let requestor_id = match requestor_id {
+    let requester_id = get_user_id_from_cookies(state.auth_client, cookies).await;
+    let requester_id = match requester_id {
         Ok(v) => Some(v),
         Err(_) => None,
     };
@@ -351,7 +351,7 @@ async fn get_user_followings(
     let req = follows_grpc::GetFollowsReq {
         user_id,
         page_number: query.page_number,
-        requestor_id,
+        requester_id,
     };
 
     let follows = follows_client
@@ -378,8 +378,8 @@ async fn get_user_followers(
     Query(query): Query<FollowsPageQuery>,
     cookies: CookieManager,
 ) -> Result<Response, HandlerError> {
-    let requestor_id = get_user_id_from_cookies(state.auth_client, cookies).await;
-    let requestor_id = match requestor_id {
+    let requester_id = get_user_id_from_cookies(state.auth_client, cookies).await;
+    let requester_id = match requester_id {
         Ok(v) => Some(v),
         Err(_) => None,
     };
@@ -388,7 +388,7 @@ async fn get_user_followers(
     let req = follows_grpc::GetFollowsReq {
         user_id,
         page_number: query.page_number,
-        requestor_id,
+        requester_id,
     };
 
     let follows = follows_client

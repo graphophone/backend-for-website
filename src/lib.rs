@@ -67,7 +67,11 @@ pub async fn run(conf: config::Config) -> Result<()> {
         )
         .nest(
             "/comments",
-            create_comments_router(comments_client, auth_client.clone()),
+            create_comments_router(
+                comments_client,
+                auth_client.clone(),
+                identity_client.clone(),
+            ),
         )
         .route(
             "/health",

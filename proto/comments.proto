@@ -2,7 +2,7 @@ syntax = "proto3";
 package comments;
 
 service Comments {
-    rpc AddComment(AddCommentReq) returns (Empty);
+    rpc AddComment(AddCommentReq) returns (CommentEntry);
     rpc RemoveComment(RemoveCommentReq) returns (Empty);
     rpc UpdateComment(UpdateCommentReq) returns (Empty);
     rpc CheckOwner(CheckOwnerReq) returns (Empty);
