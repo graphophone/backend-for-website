@@ -23,7 +23,7 @@ pub struct CommentsPageQuery {
 
 #[derive(Serialize)]
 pub struct CommentsPage {
-    #[serde(rename(serialize = "total_pages"))]
+    #[serde(rename(serialize = "totalPages"))]
     pub total_pages: i64,
     pub comments: Vec<CommentEntry>,
 }

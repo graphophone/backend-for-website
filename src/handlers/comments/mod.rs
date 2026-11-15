@@ -168,25 +168,29 @@ async fn get_music_comments(
         .collect();
     let req = identity_grpc::UserIds { user_ids };
 
-    let mut profiles: HashMap<_, _> = identity_client
-        .get_profiles(req)
-        .await
-        .map_err(|_| HandlerError::InternalError)?
-        .into_inner()
-        .profiles
-        .into_iter()
-        .map(|v| (v.user_id, v))
-        .collect();
+    let mut profiles: Option<HashMap<_, _>> = match identity_client.get_profiles(req).await {
+        Ok(v) => Some(
+            v.into_inner()
+                .profiles
+                .into_iter()
+                .map(|v| (v.user_id, v))
+                .collect(),
+        ),
+        Err(_) => None,
+    };
 
     let comments = comments_page
         .comments
         .into_iter()
         .map(|v| {
-            let profile = profiles.remove(&v.commenter_id).map(|p| MyProfileRes {
-                user_id: p.user_id,
-                username: p.username,
-                avatar_url: p.avatar_id,
-            });
+            let profile = match &mut profiles {
+                Some(prof) => prof.get(&v.commenter_id).map(|p| MyProfileRes {
+                    user_id: p.user_id,
+                    username: p.username.clone(),
+                    avatar_url: p.avatar_id.clone(),
+                }),
+                None => None,
+            };
             dto::CommentEntry {
                 comment_id: v.comment_id,
                 profile: profile,
@@ -209,7 +213,7 @@ pub fn create_comments_router(
     identity_client: IdentityClient,
 ) -> Router {
     Router::new()
-        .route("/{music_id}/comments", get(get_music_comments))
+        .route("/music/{music_id}", get(get_music_comments))
         .merge(
             Router::new()
                 .route("/", post(add_comment))
