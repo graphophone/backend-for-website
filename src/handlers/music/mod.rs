@@ -28,7 +28,7 @@ use crate::{
     },
 };
 
-mod dto;
+pub mod dto;
 
 async fn upload_music(
     State(mut music_client): State<MusicClient>,

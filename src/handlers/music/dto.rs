@@ -93,3 +93,9 @@ pub struct UserMusicRes {
     #[serde(rename(serialize = "isLiked"))]
     pub is_liked: bool,
 }
+
+#[derive(Serialize)]
+pub struct ShortMusicRes {
+    pub id: i64,
+    pub title: String,
+}

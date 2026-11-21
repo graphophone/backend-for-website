@@ -2,12 +2,13 @@ syntax = "proto3";
 package comments;
 
 service Comments {
-    rpc AddComment(AddCommentReq) returns (CommentEntry);
+    rpc AddComment(AddCommentReq) returns (Empty);
     rpc RemoveComment(RemoveCommentReq) returns (Empty);
     rpc UpdateComment(UpdateCommentReq) returns (Empty);
     rpc CheckOwner(CheckOwnerReq) returns (Empty);
     rpc ToggleLike(ToggleLikeReq) returns (Empty);
-    rpc GetComments(GetCommentsReq) returns (CommentsPage);
+    rpc GetMusicComments(GetMusicCommentsReq) returns (MusicCommentsPage);
+    rpc GetUserComments(GetUserCommentsReq) returns (UserCommentsPage);
 }
 
 message Empty {}
@@ -37,20 +38,40 @@ message ToggleLikeReq {
     int64 comment_id = 2;
 }
 
-message GetCommentsReq {
+message GetMusicCommentsReq {
     int64 music_id = 1;
     int64 page_number = 2;
     optional int64 requester_id = 3;
 }
 
-message CommentsPage {
-    int64 total_pages = 1;
-    repeated CommentEntry comments = 2;
+message GetUserCommentsReq {
+    int64 user_id = 1;
+    int64 page_number = 2;
+    optional int64 requester_id = 3;
 }
 
-message CommentEntry {
+message MusicCommentsPage {
+    int64 total_pages = 1;
+    repeated MusicCommentEntry comments = 2;
+}
+
+message MusicCommentEntry {
     int64 comment_id = 1;
     int64 commenter_id = 2;
+    string content = 3;
+    int64 created_at = 4;
+    int64 likes_count = 5;
+    bool is_liked = 6;
+}
+
+message UserCommentsPage {
+    int64 total_pages = 1;
+    repeated UserCommentEntry comments = 2;
+}
+
+message UserCommentEntry {
+    int64 comment_id = 1;
+    int64 music_id = 2;
     string content = 3;
     int64 created_at = 4;
     int64 likes_count = 5;

@@ -59,7 +59,11 @@ pub async fn run(conf: config::Config) -> Result<()> {
         .nest("/categories", create_categories_router(categories_client))
         .nest(
             "/music",
-            create_music_router(music_client, identity_client.clone(), auth_client.clone()),
+            create_music_router(
+                music_client.clone(),
+                identity_client.clone(),
+                auth_client.clone(),
+            ),
         )
         .nest(
             "/likes",
@@ -71,6 +75,7 @@ pub async fn run(conf: config::Config) -> Result<()> {
                 comments_client,
                 auth_client.clone(),
                 identity_client.clone(),
+                music_client.clone(),
             ),
         )
         .route(

@@ -16,9 +16,23 @@ service Music {
     rpc RequestMusicPlay(MusicId) returns (MusicPlayResponse);
 
     rpc GetUserMusic(UserMusicReq) returns (UserMusicPage);
+    rpc GetMusicByIds(MusicIds) returns (ShortMusicPage);
 }
 
 message Empty {}
+
+message MusicIds {
+    repeated int64 music_ids = 1;
+}
+
+message ShortMusicPage {
+    repeated ShortMusicEntry music_entries = 1;
+}
+
+message ShortMusicEntry {
+    int64 id = 1;
+    string title = 2;
+}
 
 message UserMusicReq {
     int64 user_id = 1;

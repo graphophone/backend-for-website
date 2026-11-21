@@ -15,10 +15,12 @@ use crate::{
         auth::AuthClient,
         comments::{CommentsClient, comments_grpc},
         identity::{IdentityClient, identity_grpc},
+        music::{MusicClient, music_grpc},
     },
     handlers::{
         comments::dto::{AddCommentReq, CommentsPageQuery, UpdateCommentReq},
         error::HandlerError,
+        music::dto::ShortMusicRes,
         user::dto::MyProfileRes,
     },
     middleware::{
@@ -34,6 +36,7 @@ struct CommentsState {
     pub comments_client: CommentsClient,
     pub auth_client: AuthClient,
     pub identity_client: IdentityClient,
+    pub music_client: MusicClient,
 }
 
 #[axum::debug_handler]
@@ -48,33 +51,14 @@ async fn add_comment(
         content: req.content,
     };
     let mut comments_client = state.comments_client;
-    let mut identity_client = state.identity_client;
 
-    let new_comment = comments_client
+    comments_client
         .add_comment(req)
         .await
         .map_err(|_| HandlerError::InternalError)?
         .into_inner();
 
-    let req = identity_grpc::UserId {
-        user_id: new_comment.commenter_id,
-    };
-    let profile = match identity_client.get_basic_profile(req).await {
-        Ok(v) => Some(v.into_inner()),
-        Err(_) => None,
-    };
-
-    Ok(Json(dto::CommentEntry {
-        comment_id: new_comment.comment_id,
-        profile: profile.map(|p| MyProfileRes {
-            user_id: p.user_id,
-            username: p.username,
-            avatar_url: p.avatar_id,
-        }),
-        content: new_comment.content,
-        created_at: new_comment.created_at,
-    })
-    .into_response())
+    Ok(StatusCode::OK.into_response())
 }
 
 #[axum::debug_handler]
@@ -149,14 +133,14 @@ async fn get_music_comments(
     let mut comments_client = state.comments_client;
     let mut identity_client = state.identity_client;
 
-    let req = comments_grpc::GetCommentsReq {
+    let req = comments_grpc::GetMusicCommentsReq {
         music_id,
         page_number: query.page_number,
         requester_id,
     };
 
     let comments_page = comments_client
-        .get_comments(req)
+        .get_music_comments(req)
         .await
         .map_err(|_| HandlerError::InternalError)?
         .into_inner();
@@ -191,16 +175,89 @@ async fn get_music_comments(
                 }),
                 None => None,
             };
-            dto::CommentEntry {
+            dto::MusicCommentEntry {
                 comment_id: v.comment_id,
                 profile: profile,
                 content: v.content,
                 created_at: v.created_at,
+                likes_count: v.likes_count,
+                is_liked: v.is_liked,
             }
         })
         .collect();
 
-    Ok(Json(dto::CommentsPage {
+    Ok(Json(dto::MusicCommentsPage {
+        total_pages: comments_page.total_pages,
+        comments,
+    })
+    .into_response())
+}
+
+#[axum::debug_handler]
+async fn get_user_comments(
+    State(state): State<CommentsState>,
+    Path(user_id): Path<i64>,
+    Query(query): Query<CommentsPageQuery>,
+    cookies: CookieManager,
+) -> Result<Response, HandlerError> {
+    let requester_id: Result<i64, HandlerError> =
+        get_user_id_from_cookies(state.auth_client, cookies).await;
+    let requester_id = match requester_id {
+        Ok(v) => Some(v),
+        Err(_) => None,
+    };
+    let mut comments_client = state.comments_client;
+    let mut music_client = state.music_client;
+
+    let req = comments_grpc::GetUserCommentsReq {
+        user_id,
+        page_number: query.page_number,
+        requester_id,
+    };
+
+    let comments_page = comments_client
+        .get_user_comments(req)
+        .await
+        .map_err(|_| HandlerError::InternalError)?
+        .into_inner();
+
+    let music_ids = comments_page.comments.iter().map(|v| v.music_id).collect();
+    let req = music_grpc::MusicIds { music_ids };
+
+    let mut music_map: Option<HashMap<_, _>> = match music_client.get_music_by_ids(req).await {
+        Ok(v) => Some(
+            v.into_inner()
+                .music_entries
+                .into_iter()
+                .map(|v| (v.id, v))
+                .collect(),
+        ),
+        Err(_) => None,
+    };
+
+    let comments = comments_page
+        .comments
+        .into_iter()
+        .map(|v| {
+            let music = match &mut music_map {
+                Some(mus) => mus.get(&v.music_id).map(|m| ShortMusicRes {
+                    id: m.id,
+                    title: m.title.clone(),
+                }),
+                None => None,
+            };
+            dto::UserCommentEntry {
+                comment_id: v.comment_id,
+                music,
+                content: v.content,
+                created_at: v.created_at,
+                likes_count: v.likes_count,
+                is_liked: v.is_liked,
+            }
+        })
+        .collect();
+
+    Ok(Json(dto::UserCommentsPage {
         total_pages: comments_page.total_pages,
         comments,
     })
@@ -211,9 +268,11 @@ pub fn create_comments_router(
     comments_client: CommentsClient,
     auth_client: AuthClient,
     identity_client: IdentityClient,
+    music_client: MusicClient,
 ) -> Router {
     Router::new()
         .route("/music/{music_id}", get(get_music_comments))
+        .route("/user/{user_id}", get(get_user_comments))
         .merge(
             Router::new()
                 .route("/", post(add_comment))
@@ -233,6 +292,7 @@ pub fn create_comments_router(
             comments_client,
             auth_client,
             identity_client,
+            music_client,
         })
         .layer(CookieLayer::strict())
 }
