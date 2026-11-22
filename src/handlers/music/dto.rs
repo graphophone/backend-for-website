@@ -58,7 +58,7 @@ pub struct FullMusicRes {
     #[serde(rename(serialize = "likeCount"))]
     pub like_count: i64,
     #[serde(rename(serialize = "uploader"))]
-    pub uploader: BasicProfileRes,
+    pub uploader: Option<BasicProfileRes>,
     pub categories: Vec<CategoryRes>,
     #[serde(rename(serialize = "uploadStatus"))]
     pub upload_status: String,

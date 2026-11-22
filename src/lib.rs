@@ -54,7 +54,11 @@ pub async fn run(conf: config::Config) -> Result<()> {
         )
         .nest(
             "/user",
-            create_user_router(auth_client.clone(), identity_client.clone(), follows_client),
+            create_user_router(
+                auth_client.clone(),
+                identity_client.clone(),
+                follows_client.clone(),
+            ),
         )
         .nest("/categories", create_categories_router(categories_client))
         .nest(
@@ -63,6 +67,7 @@ pub async fn run(conf: config::Config) -> Result<()> {
                 music_client.clone(),
                 identity_client.clone(),
                 auth_client.clone(),
+                follows_client.clone(),
             ),
         )
         .nest(

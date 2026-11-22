@@ -12,6 +12,7 @@ use tonic::Code;
 use crate::{
     clients::{
         auth::AuthClient,
+        follows::{FollowsClient, follows_grpc},
         identity::{IdentityClient, identity_grpc},
         music::{MusicClient, music_grpc},
     },
@@ -20,7 +21,7 @@ use crate::{
         music::dto::{
             CategoryRes, FullMusicRes, GetUserMusicQuery, UpdateMusicReq, UploadMusicReq,
         },
-        user::dto::BasicProfileRes,
+        user::dto::{BasicProfileRes, FollowsCount},
     },
     middleware::{
         auth::{auth_middleware, get_user_id_from_cookies},
@@ -29,6 +30,14 @@ use crate::{
 };
 
 pub mod dto;
+
+#[derive(Clone)]
+struct MusicState {
+    pub music_client: MusicClient,
+    pub identity_client: IdentityClient,
+    pub follows_client: FollowsClient,
+    pub auth_client: AuthClient,
+}
 
 async fn upload_music(
     State(mut music_client): State<MusicClient>,
@@ -119,28 +128,32 @@ async fn remove_thumbnail(
 }
 
 async fn get_full_music(
-    State((mut music_client, auth_client, mut identity_client)): State<(
-        MusicClient,
-        AuthClient,
-        IdentityClient,
-    )>,
+    State(state): State<MusicState>,
     cookies: CookieManager,
     Path(music_id): Path<i64>,
 ) -> Result<Response, HandlerError> {
-    let user_id = get_user_id_from_cookies(auth_client, cookies).await;
-    let user_id = match user_id {
+    let auth_client = state.auth_client;
+    let mut music_client = state.music_client;
+    let mut identity_client = state.identity_client;
+    let mut follows_client = state.follows_client;
+
+    let requester_id = get_user_id_from_cookies(auth_client, cookies).await;
+    let requester_id = match requester_id {
         Ok(v) => Some(v),
         Err(_) => None,
     };
 
-    let req = music_grpc::FullMusicReq { music_id, user_id };
+    let req = music_grpc::FullMusicReq {
+        music_id,
+        user_id: requester_id,
+    };
     let music_data = match music_client.get_full_music(req).await {
         Ok(res) => res.into_inner(),
         Err(_) => return Err(HandlerError::InternalError),
     };
 
     if music_data.upload_status != "uploaded" {
-        if let Some(user_id) = user_id {
+        if let Some(user_id) = requester_id {
             if music_data.uploader_id != user_id {
                 return Err(HandlerError::Unauthorized);
             }
@@ -154,15 +167,34 @@ async fn get_full_music(
     };
     let uploader_profile = match identity_client.get_basic_profile(req).await {
         Ok(res) => {
-            let res = res.into_inner();
-            BasicProfileRes {
-                user_id: res.user_id,
-                username: res.username,
-                avatar_url: res.avatar_id,
-                follows_count: None,
-            }
+            let profile = res.into_inner();
+
+            let req = follows_grpc::GetFollowsCountReq {
+                user_id: profile.user_id,
+                follower_id: requester_id,
+            };
+
+            let res = follows_client.get_follows_count(req).await;
+            let follows_count = match res {
+                Ok(v) => {
+                    let v = v.into_inner();
+                    Some(FollowsCount {
+                        followers_count: v.followers_count,
+                        followings_count: v.followings_count,
+                        is_followed: v.is_followed,
+                    })
+                }
+                Err(_) => None,
+            };
+
+            Some(BasicProfileRes {
+                user_id: profile.user_id,
+                username: profile.username,
+                avatar_url: profile.avatar_id,
+                follows_count,
+            })
         }
-        Err(_) => return Err(HandlerError::NotFound),
+        Err(_) => None,
     };
 
     let res = FullMusicRes {
@@ -250,11 +282,14 @@ async fn remove_music(
 
 #[axum::debug_handler]
 async fn get_user_music(
-    State((mut music_client, auth_client, _)): State<(MusicClient, AuthClient, IdentityClient)>,
+    State(state): State<MusicState>,
     cookies: CookieManager,
     Path(user_id): Path<i64>,
     Query(GetUserMusicQuery { page_number }): Query<GetUserMusicQuery>,
 ) -> Result<Response, HandlerError> {
+    let auth_client = state.auth_client;
+    let mut music_client = state.music_client;
+
     let requester_id = get_user_id_from_cookies(auth_client, cookies).await;
     let requester_id = match requester_id {
         Ok(v) => Some(v),
@@ -343,11 +378,17 @@ pub fn create_music_router(
     music_client: MusicClient,
     identity_client: IdentityClient,
     auth_client: AuthClient,
+    follows_client: FollowsClient,
 ) -> Router {
     Router::new()
         .route("/{music_id}", get(get_full_music))
         .route("/user-music/{user_id}", get(get_user_music))
-        .with_state((music_client.clone(), auth_client.clone(), identity_client))
+        .with_state(MusicState {
+            music_client: music_client.clone(),
+            identity_client: identity_client.clone(),
+            follows_client: follows_client,
+            auth_client: auth_client.clone(),
+        })
         .merge(
             Router::new()
                 .route("/{music_id}/request-play", patch(request_play))
